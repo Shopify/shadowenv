@@ -1,0 +1,9 @@
+name: shadowenv
+
+up:
+  - rust: nightly-2018-12-26
+
+commands:
+  build:     cargo build
+  test:      cargo test
+  run-built: target/debug/shadowenv ''
