@@ -1,0 +1,4 @@
+name: shadowenv
+
+up:
+  - ruby: 2.6.0

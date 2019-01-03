@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+
+# $t = Time.now
+# at_exit { STDERR.puts("\x1b[38;5;241mcompleted in #{((Time.now - $t) * 1000).floor}ms") }
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require('shadowenv')
+
+unless ARGV.size == 2
+  abort("usage: eval $(#{$PROGRAM_NAME} <posix|fish> \"${__shadowenv_data}\")")
+end
+
+print Shadowenv::Runner.call(env: ENV, format: ARGV[0], shadowenv_data: ARGV[1])
