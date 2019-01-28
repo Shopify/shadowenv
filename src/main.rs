@@ -62,6 +62,8 @@ fn run(shadowenv_data: &str) -> Result<(), Box<Error>> {
     let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data));
 
     let target_hash = match &target { Some(t) => t.hash().unwrap_or(0), None => 0 };
+    // TODO: on initial load, we print 'deactivated shadowenv.', but shouldn't.
+    // I think this has to do with target_hash==0
 
     if let Some(target) = target {
         if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
