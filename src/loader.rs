@@ -37,5 +37,8 @@ pub fn load(at: PathBuf, relative_component: &str) -> Result<Option<Source>, Box
             Err(e) => { return Err(Box::new(e)); },
         }
     }
+    if source.files.len() == 0 {
+        return Ok(None);
+    }
     return Ok(Some(source));
 }

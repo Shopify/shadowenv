@@ -12,6 +12,7 @@ mod shadowenv;
 mod hash;
 mod loader;
 mod undo;
+mod tests;
 
 use crate::shadowenv::Shadowenv;
 use crate::lang::ShadowLang;
@@ -47,7 +48,8 @@ fn run(shadowenv_data: &str) -> Result<(), Box<Error>> {
     let active: Option<Hash> = match prev_hash {
         None     => None,
         Some("") => None,
-        Some(x)  => Some(Hash::from_str(x)?),
+        Some("0000000000000000") => None,
+        Some(x) => Some(Hash::from_str(x)?),
     };
 
     let target: Option<Source> = loader::load(env::current_dir()?, ".shadowenv.d")?;
@@ -62,13 +64,15 @@ fn run(shadowenv_data: &str) -> Result<(), Box<Error>> {
     let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data));
 
     let target_hash = match &target { Some(t) => t.hash().unwrap_or(0), None => 0 };
-    // TODO: on initial load, we print 'deactivated shadowenv.', but shouldn't.
-    // I think this has to do with target_hash==0
 
-    if let Some(target) = target {
-        if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
-            panic!();
-        }
+    match target {
+        Some(target) => {
+            print_activation(true);
+            if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
+                panic!();
+            }
+        },
+        None => { print_activation(false); },
     }
 
     let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
@@ -80,8 +84,6 @@ fn run(shadowenv_data: &str) -> Result<(), Box<Error>> {
             None => { println!("unset {}", k); },
         }
     }
-
-    print_activation(shadowenv.exports().len() > 0);
 
     Ok(())
 }
