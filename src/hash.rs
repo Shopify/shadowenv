@@ -1,5 +1,3 @@
-use std::error;
-use std::error::Error;
 use std::convert::TryInto;
 use std::result::Result;
 use std::str::FromStr;
@@ -8,8 +6,10 @@ use std::u64;
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 
+use failure::Error;
+
 const FILE_SEPARATOR: &'static str = "\x1C";
-const RECORD_SEPARATOR: &'static str = "\x1D";
+const GROUP_SEPARATOR: &'static str = "\x1D";
 
 #[derive(Debug)]
 pub struct SourceFile {
@@ -27,26 +27,30 @@ pub struct Hash {
     pub hash: u64,
 }
 
+#[derive(Fail, Debug)]
+#[fail(display = "wrong input size")]
+struct WrongInputSize;
+
 impl Source {
     pub fn new() -> Self {
         Source{ files: vec![] }
     }
 
-    pub fn add_file(&mut self, name: String, contents: String) -> Result<(), Box<Error>> {
+    pub fn add_file(&mut self, name: String, contents: String) -> Result<(), Error> {
         self.files.push(
             SourceFile { name: name.to_string(), source: contents.to_string() },
         );
         Ok(())
     }
 
-    pub fn hash(&self) -> Result<u64, Box<Error>> {
+    pub fn hash(&self) -> Result<u64, Error> {
         let mut hasher = VarBlake2b::new(8)?;
         if self.files.len() == 0 {
             return Ok(0);
         }
         for file in self.files.iter() {
             hasher.input(&file.name);
-            hasher.input(RECORD_SEPARATOR);
+            hasher.input(GROUP_SEPARATOR);
             hasher.input(&file.source);
             hasher.input(FILE_SEPARATOR);
         }
@@ -59,11 +63,11 @@ impl Source {
 }
 
 impl FromStr for Hash {
-    type Err = Box<error::Error>;
+    type Err = Error;
 
-    fn from_str(key: &str) -> Result<Self, Box<Error>> {
+    fn from_str(key: &str) -> Result<Self, Error> {
         if key.len() != 16 {
-            return Err("wrong input size".to_string().into());
+            return Err(WrongInputSize{}.into());
         }
         let hash = u64::from_str_radix(&key, 16)?;
         Ok(Hash{ hash: hash })

@@ -1,5 +1,6 @@
 use std::result::Result;
-use std::error::Error;
+
+use failure::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Scalar {
@@ -30,7 +31,7 @@ pub struct Data {
 } 
 
 impl Data {
-    pub fn from_str(data: &str) -> Result<Data, Box<Error>> {
+    pub fn from_str(data: &str) -> Result<Data, Error> {
         let d: Data = serde_json::from_str(data)?;
         Ok(d)
     }

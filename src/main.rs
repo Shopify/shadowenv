@@ -6,6 +6,8 @@ extern crate ketos_derive;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate failure;
 
 mod lang;
 mod shadowenv;
@@ -19,12 +21,12 @@ use crate::lang::ShadowLang;
 use crate::hash::{Hash, Source};
 
 use std::env;
-use std::error::Error;
 use std::process;
 use std::rc::Rc;
 use std::result::Result;
 use std::str::FromStr;
 
+use failure::Error;
 use serde_json;
 
 fn main() {
@@ -40,7 +42,7 @@ fn main() {
     }
 }
 
-fn run(shadowenv_data: &str) -> Result<(), Box<Error>> {
+fn run(shadowenv_data: &str) -> Result<(), Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
