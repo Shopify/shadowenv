@@ -70,8 +70,9 @@ fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
             let seed = ed25519::Seed::generate();
 
             let mut file = match File::create(OsString::from(&path)) {
+                // TODO: error type
                 Err(why) => panic!("couldn''t write to {}: {}", path, why),
-                Ok(_) => println!("generated shadowenv key at: {}", path),
+                Ok(_) => (),
             };
 
             Ok(Ed25519Signer::from(&seed))
@@ -98,16 +99,15 @@ pub fn run() -> Result<(), Error> {
     let path = format!(".shadowenv.d/trust-{}", fingerprint);
 
     let mut file = match File::create(OsString::from(&path)) {
+        // TODO: error type
         Err(why) => panic!("couldn't create {}: {}", path, why),
         Ok(file) => file,
     };
 
     match file.write_all(sig.as_bytes()) {
+        // TODO: error type
         Err(why) => panic!("couldn't write to {}: {}", path, why),
-        Ok(_) => {
-            println!("successfully wrote to {}", path);
-            Ok(())
-        }
+        Ok(_) => Ok(()),
     }
 }
 

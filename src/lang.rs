@@ -164,6 +164,7 @@ impl ShadowLang {
                 eprintln!("");
                 interp.display_trace(&trace);
             }
+            // TODO: error type?
             panic!();
         };
 
@@ -171,6 +172,7 @@ impl ShadowLang {
             let fname = format!("__shadowenv__{}", source_file.name);
             let prog = format!("(define ({} env) (do {}))", fname, source_file.source);
 
+            // TODO: error type?
             if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
                 interp.display_error(&err);
                 if let Some(trace) = interp.get_traceback() {
@@ -184,6 +186,7 @@ impl ShadowLang {
         for source_file in source.files {
             let fname = format!("__shadowenv__{}", source_file.name);
             if let Err(err) = interp.call(&fname, vec![Value::Foreign(shadowenv.clone())]) {
+                // TODO: error type?
                 interp.display_error(&err);
                 if let Some(trace) = interp.get_traceback() {
                     eprintln!("");

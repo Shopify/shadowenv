@@ -54,6 +54,7 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
         Some(target) => {
             print_activation(true);
             if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
+                // TODO: error type
                 panic!();
             }
         }
