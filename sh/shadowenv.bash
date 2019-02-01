@@ -1,3 +1,7 @@
+shadowenv-auto() {
+  eval "$("{{self}}" hook "${__shadowenv_data}")"
+}
+
 # Hookbook (https://github.com/Shopify/hookbook)
 #
 # Copyright 2019 Shopify Inc.
@@ -94,3 +98,7 @@ esac
 
 unset __hookbook_shell
 unset __hookbook_shellname
+
+## End of hookbook
+
+hookbook_add_hook shadowenv-auto

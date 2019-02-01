@@ -8,6 +8,7 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate failure;
+extern crate clap;
 
 mod lang;
 mod shadowenv;
@@ -15,85 +16,55 @@ mod hash;
 mod loader;
 mod undo;
 mod tests;
-
-use crate::shadowenv::Shadowenv;
-use crate::lang::ShadowLang;
-use crate::hash::{Hash, Source};
+mod hook;
+mod init;
 
 use std::env;
 use std::process;
-use std::rc::Rc;
-use std::result::Result;
-use std::str::FromStr;
+use clap::{Arg, App, SubCommand, AppSettings};
 
-use failure::Error;
-use serde_json;
+use crate::hook::VariableOutputMode;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 3 {
-        eprintln!("usage: {} <posix|fish> \"$__shadowenv_data\"", args[0]);
-        process::exit(1);
-    }
+    let app_matches = App::new("shadowenv")
+        .version("0.0.1")
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(SubCommand::with_name("hook")
+                    .about("Runs the shell hook. You shouldn't need to run this manually.")
+                    .arg(Arg::with_name("data")
+                         .required(true))
+                    .arg(Arg::with_name("fish")
+                         .long("fish")
+                         .help("Format variable assignments for fish shell")))
+        .subcommand(SubCommand::with_name("init")
+                    .about("Prints a script which can be eval'd to set up shadowenv in various shells")
+                    .setting(AppSettings::SubcommandRequiredElseHelp)
+                    .subcommand(SubCommand::with_name("bash")
+                                .about("Prints a script which can be eval'd by bash to set up shadowenv."))
+                    .subcommand(SubCommand::with_name("zsh")
+                                .about("Prints a script which can be eval'd by zsh to set up shadowenv."))
+                    .subcommand(SubCommand::with_name("fish")
+                                .about("Prints a script which can be eval'd by fish to set up shadowenv.")))
+        .get_matches();
 
-    if let Err(err) = run(&args[2]) {
-        eprintln!("error: {}", err);
-        std::process::exit(1);
-    }
-}
-
-fn run(shadowenv_data: &str) -> Result<(), Error> {
-    let mut parts = shadowenv_data.splitn(2, ":");
-    let prev_hash = parts.next();
-    let json_data = parts.next().unwrap_or("{}");
-
-    let active: Option<Hash> = match prev_hash {
-        None     => None,
-        Some("") => None,
-        Some("0000000000000000") => None,
-        Some(x) => Some(Hash::from_str(x)?),
-    };
-
-    let target: Option<Source> = loader::load(env::current_dir()?, ".shadowenv.d")?;
-
-    match (&active, &target) {
-        (None, None) => { return Ok(()); },
-        (Some(a), Some(t)) if a.hash == t.hash()? => { return Ok(()); },
-        (_, _) => (),
-    }
-
-    let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data));
-
-    let target_hash = match &target { Some(t) => t.hash().unwrap_or(0), None => 0 };
-
-    match target {
-        Some(target) => {
-            print_activation(true);
-            if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
-                panic!();
+    match app_matches.subcommand() {
+        ("hook", Some(matches)) => {
+            let data = matches.value_of("data").unwrap();
+            let mode = match matches.is_present("fish") {
+                true => VariableOutputMode::FishMode,
+                false => VariableOutputMode::PosixMode
+            };
+            if let Err(err) = hook::run(data, mode) {
+                eprintln!("error: {}", err);
+                std::process::exit(1);
             }
         },
-        None => { print_activation(false); },
+        ("init", Some(matches)) => {
+            let argv0: String = env::args().next().unwrap();
+            let shellname = matches.subcommand_name().unwrap();
+            process::exit(init::run(argv0.as_ref(), shellname));
+        },
+        _ => { panic!("subcommand was required by config but somehow none was provided"); },
     }
-
-    let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
-    let final_data = shadowenv.shadowenv_data();
-    println!("__shadowenv_data={:?}", format!("{:016x}:", target_hash).to_string() + &serde_json::to_string(&final_data)?);
-    for (k, v) in shadowenv.exports() {
-        match v {
-            Some(s) => { println!("export {}={:?}", k, s); },
-            None => { println!("unset {}", k); },
-        }
-    }
-
-    Ok(())
 }
 
-fn print_activation(activated: bool) {
-    let word = match activated { true => "activated", false => "deactivated" };
-    let shadowenv = String::new() +
-        "\x1b[38;5;249ms\x1b[38;5;248mh\x1b[38;5;247ma\x1b[38;5;246md\x1b[38;5;245mo" +
-        "\x1b[38;5;244mw\x1b[38;5;243me\x1b[38;5;242mn\x1b[38;5;241mv\x1b[38;5;240m";
-    eprintln!("\x1b[1;34m{} {}.\x1b[0m", word, shadowenv);
-}

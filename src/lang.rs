@@ -46,17 +46,6 @@ impl ShadowLang {
             .module_loader(Box::new(ketos::module::NullModuleLoader)) // nerf code loading
             .finish();
 
-        println!("AAAA");
-        interp.scope().with_values(|v| println!("{:?}", v));
-        interp.scope().with_constants(|v| println!("{:?}", v));
-        interp.scope().with_macros(|v| println!("{:?}", v));
-        interp.scope().with_imports(|v| for e in v { println!("{:?}", e.names);});
-        interp.scope().with_exports(|v| println!("{:?}", v));
-        // for x in interp.names().borrow().iter() {
-        //     println!("{:?}", x);
-        // }
-        println!("BBBB");
-
         let shadowenv_name = interp.scope().add_name("shadowenv");
         interp.scope().add_constant(shadowenv_name, Value::Foreign(shadowenv.clone()));
 

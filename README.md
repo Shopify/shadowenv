@@ -6,8 +6,16 @@ some limited ability to make the manipulations dynamic.
 
 ![shadowenv in action](https://burkelibbey.s3.amazonaws.com/shadowenv.gif)
 
-In order to use Shadowenv, you must either `source shadowenv.sh` (for bash or zsh) or `source
-shadowenv.fish` (for fish). Then, upon entering a directory containing a `.shadowenv.d` directory,
+In order to use shadowenv, add a line to your shell profile (`.zshrc`, `.bash_profile`, or
+`config.fish`) reading:
+
+```bash
+eval "$(shadowenv init bash)" # for bash
+eval "$(shadowenv init zsh)"  # for zsh
+shadowenv init fish | source  # for fish
+```
+
+With this code loaded, upon entering a directory containing a `.shadowenv.d` directory,
 any `*.scm` files in that directory will be executed and you will see "activated shadowenv." in your
 shell.
 
