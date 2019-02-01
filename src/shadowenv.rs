@@ -1,4 +1,4 @@
-use std::cell::{RefCell, Ref, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
 
 use crate::undo;
@@ -19,7 +19,7 @@ impl Shadowenv {
     pub fn new(env: HashMap<String, String>, shadowenv_data: undo::Data) -> Shadowenv {
         let unshadowed_env = Shadowenv::unshadow(&env, shadowenv_data);
 
-        Shadowenv{
+        Shadowenv {
             env: RefCell::new(unshadowed_env.clone()),
             unshadowed_env: unshadowed_env,
             initial_env: env.clone(),
@@ -27,7 +27,10 @@ impl Shadowenv {
         }
     }
 
-    fn unshadow(env: &HashMap<String, String>, shadowenv_data: undo::Data) -> HashMap<String, String> {
+    fn unshadow(
+        env: &HashMap<String, String>,
+        shadowenv_data: undo::Data,
+    ) -> HashMap<String, String> {
         let cell = RefCell::new(env.clone());
         for scalar in shadowenv_data.scalars {
             if env_get(cell.borrow(), scalar.name.clone()) == scalar.current {
@@ -99,7 +102,11 @@ impl Shadowenv {
     }
 
     pub fn set(&self, a: &str, b: Option<&str>) -> () {
-        env_set(&mut self.env.borrow_mut(), a.to_string(), b.map(|s| s.to_string()))
+        env_set(
+            &mut self.env.borrow_mut(),
+            a.to_string(),
+            b.map(|s| s.to_string()),
+        )
     }
 
     pub fn get(&self, a: &str) -> Option<String> {
@@ -136,8 +143,12 @@ impl Shadowenv {
 
 fn env_set(env: &mut RefMut<HashMap<String, String>>, a: String, b: Option<String>) -> () {
     match b {
-        Some(string) => { env.insert(a, string); },
-        None => { env.remove(&a); },
+        Some(string) => {
+            env.insert(a, string);
+        }
+        None => {
+            env.remove(&a);
+        }
     }
 }
 

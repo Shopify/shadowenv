@@ -28,7 +28,7 @@ pub struct Data {
     pub scalars: Vec<Scalar>,
     #[serde(default)]
     pub lists: Vec<List>,
-} 
+}
 
 impl Data {
     pub fn from_str(data: &str) -> Result<Data, Error> {
@@ -37,14 +37,25 @@ impl Data {
     }
 
     pub fn new() -> Self {
-        Data { scalars: vec![], lists: vec![] }
+        Data {
+            scalars: vec![],
+            lists: vec![],
+        }
     }
 
     pub fn add_scalar(&mut self, name: String, original: Option<String>, current: Option<String>) {
-        self.scalars.push(Scalar { name: name, original: original, current: current })
+        self.scalars.push(Scalar {
+            name: name,
+            original: original,
+            current: current,
+        })
     }
 
     pub fn add_list(&mut self, name: String, additions: Vec<String>, deletions: Vec<String>) {
-        self.lists.push(List { name: name, additions: additions, deletions: deletions })
+        self.lists.push(List {
+            name: name,
+            additions: additions,
+            deletions: deletions,
+        })
     }
 }

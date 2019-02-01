@@ -18,10 +18,14 @@ impl TestCase {
 fn test_a() {
     TestCase {
         initial_env: vec!["A=b".to_string()],
-    }.run()
+    }
+    .run()
 }
 
-fn with_initial_env<F>(vars: &Vec<String>, f: F) where F: Fn() {
+fn with_initial_env<F>(vars: &Vec<String>, f: F)
+where
+    F: Fn(),
+{
     let mut prev: HashMap<String, String> = HashMap::new();
 
     for (var, val) in std::env::vars() {
@@ -39,6 +43,6 @@ fn with_initial_env<F>(vars: &Vec<String>, f: F) where F: Fn() {
     // note: we don't correctly restore on panic or assertion failure.
     f();
 
-    env::vars().for_each(|(var, _)| env::remove_var(var) );
-    prev.iter().for_each(|(var, val)| env::set_var(var, val) );
+    env::vars().for_each(|(var, _)| env::remove_var(var));
+    prev.iter().for_each(|(var, val)| env::set_var(var, val));
 }

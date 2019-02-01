@@ -1,4 +1,4 @@
-use crate::hash::{Source};
+use crate::hash::Source;
 
 use std::fs::{self, File};
 use std::io::{prelude::*, ErrorKind};
@@ -33,9 +33,11 @@ pub fn load(at: PathBuf, relative_component: &str) -> Result<Option<Source>, Err
                         }
                     }
                 }
-            },
+            }
             Err(ref e) if e.kind() == ErrorKind::NotFound => (),
-            Err(e) => { return Err(e.into()); },
+            Err(e) => {
+                return Err(e.into());
+            }
         }
     }
     if source.files.len() == 0 {

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
@@ -11,7 +11,10 @@ pub fn run(selfpath: &str, shellname: &str) -> i32 {
         "zsh" => print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),
         "fish" => print_script(pb, include_bytes!("../sh/shadowenv.fish.in")),
         _ => {
-            eprintln!("invalid shell name '{}' (must be one of bash, zsh, fish)", shellname);
+            eprintln!(
+                "invalid shell name '{}' (must be one of bash, zsh, fish)",
+                shellname
+            );
             1
         }
     }

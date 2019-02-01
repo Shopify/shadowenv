@@ -1,26 +1,28 @@
-use crate::shadowenv::Shadowenv;
 use crate::hash::Source;
+use crate::shadowenv::Shadowenv;
 
-use std::rc::Rc;
-use ketos::{Error, Interpreter, Value, FromValueRef};
+use ketos::{Error, FromValueRef, Interpreter, Value};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 pub struct ShadowLang {}
 
 macro_rules! ketos_fn2 {
     ( $scope:expr => $name:expr => fn $ident:ident
             (...) -> $res:ty ) => {
-        $scope.add_value_with_name($name,
-            |name| Value::new_foreign_fn(name, move |_scope, args| {
+        $scope.add_value_with_name($name, |name| {
+            Value::new_foreign_fn(name, move |_scope, args| {
                 let res = $ident(args)?;
                 Ok(<$res as Into<Value>>::into(res))
-            }))
-    }
+            })
+        })
+    };
 }
 
 fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
-    let res = vals.iter().fold(PathBuf::new(), |acc, v|
-        acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()) // TODO(burke): don't unwrap
+    let res = vals.iter().fold(
+        PathBuf::new(),
+        |acc, v| acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()), // TODO(burke): don't unwrap
     );
 
     Ok(res.to_string_lossy().to_string())
@@ -29,13 +31,13 @@ fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
 macro_rules! assert_args {
     ( $args:expr , $count:expr , $name:expr ) => {
         if $args.len() != $count {
-            return Err(From::from(ketos::exec::ExecError::ArityError{
+            return Err(From::from(ketos::exec::ExecError::ArityError {
                 name: Some($name),
                 expected: ketos::function::Arity::Exact($count as u32),
                 found: $args.len() as u32,
             }));
         }
-    }
+    };
 }
 
 impl ShadowLang {
@@ -47,68 +49,96 @@ impl ShadowLang {
             .finish();
 
         let shadowenv_name = interp.scope().add_name("shadowenv");
-        interp.scope().add_constant(shadowenv_name, Value::Foreign(shadowenv.clone()));
+        interp
+            .scope()
+            .add_constant(shadowenv_name, Value::Foreign(shadowenv.clone()));
 
-        ketos_fn2!{ interp.scope() => "path-concat" =>
-            fn path_concat(...) -> String }
+        ketos_fn2! { interp.scope() => "path-concat" =>
+        fn path_concat(...) -> String }
 
-        interp.scope().add_value_with_name("env/get", |name| Value::new_foreign_fn(name, move |ctx, args| {
-            assert_args!(args, 1, name);
+        interp.scope().add_value_with_name("env/get", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 1, name);
 
-            let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
-            let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-            let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let value = ctx
+                    .scope()
+                    .get_constant(shadowenv_name)
+                    .expect("bug: shadowenv not defined");
+                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-            let foo = shadowenv.get(name)
-                .map(|s| <String as Into<Value>>::into(s.to_string()))
-                .unwrap_or(Value::Unit);
-            Ok(foo)
-        }));
+                let foo = shadowenv
+                    .get(name)
+                    .map(|s| <String as Into<Value>>::into(s.to_string()))
+                    .unwrap_or(Value::Unit);
+                Ok(foo)
+            })
+        });
 
-        interp.scope().add_value_with_name("env/set", |name| Value::new_foreign_fn(name, move |ctx, args| {
-            assert_args!(args, 2, name);
+        interp.scope().add_value_with_name("env/set", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 2, name);
 
-            let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
-            let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-            let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-            let value = <&str as FromValueRef>::from_value_ref(&args[1]).ok();
+                let value = ctx
+                    .scope()
+                    .get_constant(shadowenv_name)
+                    .expect("bug: shadowenv not defined");
+                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let value = <&str as FromValueRef>::from_value_ref(&args[1]).ok();
 
-            shadowenv.set(name, value);
-            Ok(Value::Unit)
-        }));
+                shadowenv.set(name, value);
+                Ok(Value::Unit)
+            })
+        });
 
-        interp.scope().add_value_with_name("env/prepend-to-pathlist", |name| Value::new_foreign_fn(name, move |ctx, args| {
-            assert_args!(args, 2, name);
+        interp
+            .scope()
+            .add_value_with_name("env/prepend-to-pathlist", |name| {
+                Value::new_foreign_fn(name, move |ctx, args| {
+                    assert_args!(args, 2, name);
 
-            let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
-            let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-            let name  = <&str as FromValueRef>::from_value_ref(&args[0])?;
-            let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                    let value = ctx
+                        .scope()
+                        .get_constant(shadowenv_name)
+                        .expect("bug: shadowenv not defined");
+                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-            shadowenv.prepend_to_pathlist(name, value);
-            Ok(Value::Unit)
-        }));
+                    shadowenv.prepend_to_pathlist(name, value);
+                    Ok(Value::Unit)
+                })
+            });
 
-        interp.scope().add_value_with_name("let", |name| Value::new_foreign_fn(name, move |ctx, args| {
-            assert_args!(args, 2, name);
+        interp.scope().add_value_with_name("let", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 2, name);
 
-            let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
-            let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-            let name  = <&str as FromValueRef>::from_value_ref(&args[0])?;
-            let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                let value = ctx
+                    .scope()
+                    .get_constant(shadowenv_name)
+                    .expect("bug: shadowenv not defined");
+                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-            shadowenv.remove_from_pathlist(name, value);
-            Ok(Value::Unit)
-        }));
+                shadowenv.remove_from_pathlist(name, value);
+                Ok(Value::Unit)
+            })
+        });
 
         {
             let name = interp.scope().add_name("env/remove-from-pathlist");
             let ffn = Value::new_foreign_fn(name, move |ctx, args| {
                 assert_args!(args, 2, name);
 
-                let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
+                let value = ctx
+                    .scope()
+                    .get_constant(shadowenv_name)
+                    .expect("bug: shadowenv not defined");
                 let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-                let name  = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
                 shadowenv.remove_from_pathlist(name, value);

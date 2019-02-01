@@ -33,13 +33,14 @@ struct WrongInputSize;
 
 impl Source {
     pub fn new() -> Self {
-        Source{ files: vec![] }
+        Source { files: vec![] }
     }
 
     pub fn add_file(&mut self, name: String, contents: String) -> Result<(), Error> {
-        self.files.push(
-            SourceFile { name: name.to_string(), source: contents.to_string() },
-        );
+        self.files.push(SourceFile {
+            name: name.to_string(),
+            source: contents.to_string(),
+        });
         Ok(())
     }
 
@@ -67,10 +68,10 @@ impl FromStr for Hash {
 
     fn from_str(key: &str) -> Result<Self, Error> {
         if key.len() != 16 {
-            return Err(WrongInputSize{}.into());
+            return Err(WrongInputSize {}.into());
         }
         let hash = u64::from_str_radix(&key, 16)?;
-        Ok(Hash{ hash: hash })
+        Ok(Hash { hash: hash })
     }
 }
 
@@ -82,7 +83,7 @@ impl ToString for Hash {
 
 #[test]
 fn test_key_encoding() {
-    let key = Hash{ hash: 2 };
+    let key = Hash { hash: 2 };
     let hex = key.to_string();
     assert_eq!("0000000000000002", hex);
     let key2: Hash = Hash::from_str(&hex).unwrap();
