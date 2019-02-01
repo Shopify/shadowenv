@@ -31,7 +31,7 @@ fn main() {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("hook")
                     .about("Runs the shell hook. You shouldn't need to run this manually.")
-                    .arg(Arg::with_name("data")
+                    .arg(Arg::with_name("$__shadowenv_data")
                          .required(true))
                     .arg(Arg::with_name("fish")
                          .long("fish")
@@ -49,7 +49,7 @@ fn main() {
 
     match app_matches.subcommand() {
         ("hook", Some(matches)) => {
-            let data = matches.value_of("data").unwrap();
+            let data = matches.value_of("$__shadowenv_data").unwrap();
             let mode = match matches.is_present("fish") {
                 true => VariableOutputMode::FishMode,
                 false => VariableOutputMode::PosixMode

@@ -58,7 +58,7 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 
     match mode {
         VariableOutputMode::PosixMode => {
-            println!("__shadowenv_data={:?}", shadowenv_data);
+            println!("__shadowenv_data={}", shadowenv_data);
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => { println!("export {}={:?}", k, s); },
@@ -67,7 +67,7 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             }
         }
         VariableOutputMode::FishMode => {
-            println!("set __shadowenv_data {:?}", shadowenv_data);
+            println!("set __shadowenv_data {}", shadowenv_data);
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => { println!("set -g {} {:?}", k, s); },
