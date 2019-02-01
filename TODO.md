@@ -5,3 +5,5 @@
 * Write man(1) documentation
 * Write man(5) documentation
 * Tests, tests, tests...
+* rate-limit untrusted error message
+* think about rate-limiting for other errors?
