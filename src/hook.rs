@@ -29,7 +29,8 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    let target: Option<Source> = loader::load(env::current_dir()?, ".shadowenv.d")?;
+    let target: Option<Source> =
+        loader::load(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
 
     match (&active, &target) {
         (None, None) => {
