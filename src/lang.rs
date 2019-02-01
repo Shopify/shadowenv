@@ -1,7 +1,7 @@
 use crate::hash::Source;
 use crate::shadowenv::Shadowenv;
 
-use ketos::{Error, FromValueRef, Interpreter, Value};
+use ketos::{Error, FromValueRef, Value};
 use std::path::PathBuf;
 use std::rc::Rc;
 

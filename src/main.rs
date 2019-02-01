@@ -16,7 +16,7 @@ mod init;
 mod lang;
 mod loader;
 mod shadowenv;
-mod tests;
+mod trust;
 mod undo;
 
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -38,6 +38,10 @@ fn main() {
                         .long("fish")
                         .help("Format variable assignments for fish shell"),
                 ),
+        )
+        .subcommand(
+            SubCommand::with_name("trust")
+                .about("Mark this directory as 'trusted', allowing shadowenv programs to be run"),
         )
         .subcommand(
             SubCommand::with_name("init")
@@ -69,6 +73,9 @@ fn main() {
                 eprintln!("error: {}", err);
                 std::process::exit(1);
             }
+        }
+        ("trust", Some(_)) => {
+            trust::run();
         }
         ("init", Some(matches)) => {
             let argv0: String = env::args().next().unwrap();
