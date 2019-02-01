@@ -1,6 +1,4 @@
-# Shadowenv [wip]
-
-**This is already out of date, but will be brought up to date and finished soon.**
+# Shadowenv
 
 Shadowenv provides a way to perform a set of manipulations to the process environment upon entering
 a directory in a shell. These manipulations are reversed when leaving the directory, and there is
@@ -9,14 +7,15 @@ some limited ability to make the manipulations dynamic.
 ![shadowenv in action](https://burkelibbey.s3.amazonaws.com/shadowenv.gif)
 
 In order to use Shadowenv, you must either `source shadowenv.sh` (for bash or zsh) or `source
-shadowenv.fish` (for fish). Then, upon entering a directory containing a `.shadowenv` file, the
-program will be executed and you will see "activated shadowenv." in your shell.
+shadowenv.fish` (for fish). Then, upon entering a directory containing a `.shadowenv.d` directory,
+any `*.scm` files in that directory will be executed and you will see "activated shadowenv." in your
+shell.
 
-The syntax for the `.shadowenv` file is a minimal
-[Scheme-like](https://en.wikipedia.org/wiki/Scheme_(programming_language)) language. This has
-the interesting property of allowing us to do things like simulate `chruby reset` upon entry into
-a directory without the user having `chruby` installed (and undo these changes to the environment
-when `cd`'ing back out):
+The syntax for the `.shadowenv.d/*.scm` files is a minimal
+[Scheme-like](https://en.wikipedia.org/wiki/Scheme_(programming_language)) language. Unlike other
+tools like [direnv](https://direnv.net/), this has the interesting property of allowing us to do
+things like simulate `chruby reset` upon entry into a directory without the user having `chruby`
+installed (and undo these changes to the environment when `cd`'ing back out):
 
 ```scheme
 (when-let ((ruby-root (env/get "RUBY_ROOT")))
@@ -30,8 +29,22 @@ when `cd`'ing back out):
 ```
 
 The intention isn't really for users to write these files directly, nor to commit them to
-repositories, but for other tool authors to generate configuration on the user's machine. Before
-v1.0, we'll likely add `.shadowenv.d/*` as a concept.
+repositories , but for other tool authors to generate configuration on the user's machine.
+
+## `.shadowenv.d`
+
+The `.shadowenv.d` directory will generally exist at the root of your repository (in the same
+directory as `.git`.
+
+We *strongly* recommend creating `gitignore`'ing everything under `.shadowenv.d` (`echo '*'
+> .shadowenv.d/.gitignore`).
+
+A `.shadowenv.d` will contain any number of `*.scm` files. These are evaluated in the order in which
+the OS returns when reading the directory: generally alphabetically. We *strongly* recommend using
+a prefix like `090_something.scm` to make it easy to maintain ordering.
+
+`.shadowenv.d` will also contain a `trust-<fingerprint>` file if it has been marked as trusted. (see
+the trust section later on).
 
 ## Language
 
@@ -74,6 +87,19 @@ implement our own use-cases. Take a look at:
 * The [standard library
   definition](https://github.com/Shopify/shadowenv/blob/master/lib/shadowenv/lang/lib.rb); or
 * [Shadowenv's own `.shadowenv`](https://github.com/Shopify/shadowenv/blob/master/.shadowenv).
+
+## Trust
+
+If you `cd` into a directory containing `.shadowenv.d/*.scm` files, they will not be run and you
+will see a message indicating so. This is for security reasons: we don't want to enable random
+stuff downloaded from the internet to modify your `PATH`, for example.
+
+You can run `shadowenv trust` to mark a directory as trusted.
+
+Technically, running `shadowenv trust` will create a file at `.shadowenv.d/trust-<fingerprint>`,
+indicating that it's okay for `shadowenv` to run this code. The `.shadowenv.d/trust-*` file contains
+a cryptographic signature of the directory path. The key is generated the first time `shadowenv` is
+run, and the fingerprint is an identifier for the key.
 
 ## Usability
 

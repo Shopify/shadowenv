@@ -38,51 +38,30 @@ macro_rules! assert_args {
     }
 }
 
-// macro_rules! sekfn {
-//     ( $scope:expr => $shadowenv_name:expr => $name:expr => fn $ident:ident
-//             ( $( $arg:ident : $arg_ty:ty ),* ) -> res { $body:expr } ) => {
-//         $scope.add_value_with_name($name,
-//             |name| ketos::value::Value::new_foreign_fn(name, move |ctx, args| {
-//                 let expected = 0 $( + { stringify!($arg); 1 } )*;
-
-//                 if args.len() != expected {
-//                     return Err(From::from(ketos::exec::ExecError::ArityError{
-//                         name: Some(name),
-//                         expected: ketos::function::Arity::Exact(expected as u32),
-//                         found: args.len() as u32,
-//                     }));
-//                 }
-
-//                 let mut iter = (&*args).iter();
-
-//                 $(
-//                     let $arg = (<$arg_ty as ketos::value::FromValueRef>::from_value_ref(iter.next().unwrap()))?;
-//                 ),*
-
-//                 let value = ctx.scope().get_constant($shadowenv_name).expect("bug: shadowenv not defined");
-//                 let __shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-
-//                 let body = $body;
-//                 Ok(ketos::value::Value::from(body))
-//             }))
-//     }
-// }
-
 impl ShadowLang {
     pub fn run_program(shadowenv: Rc<Shadowenv>, source: Source) -> Result<(), Error> {
-        let interp = Interpreter::new();
+        let interp = ketos::Builder::new()
+            .restrict(ketos::RestrictConfig::strict()) // shouldn't need much CPU or RAM
+            .io(Rc::new(ketos::GlobalIo::null())) // no printing
+            .module_loader(Box::new(ketos::module::NullModuleLoader)) // nerf code loading
+            .finish();
+
+        println!("AAAA");
+        interp.scope().with_values(|v| println!("{:?}", v));
+        interp.scope().with_constants(|v| println!("{:?}", v));
+        interp.scope().with_macros(|v| println!("{:?}", v));
+        interp.scope().with_imports(|v| for e in v { println!("{:?}", e.names);});
+        interp.scope().with_exports(|v| println!("{:?}", v));
+        // for x in interp.names().borrow().iter() {
+        //     println!("{:?}", x);
+        // }
+        println!("BBBB");
 
         let shadowenv_name = interp.scope().add_name("shadowenv");
         interp.scope().add_constant(shadowenv_name, Value::Foreign(shadowenv.clone()));
 
         ketos_fn2!{ interp.scope() => "path-concat" =>
             fn path_concat(...) -> String }
-
-        // sekfn!{ interp.scope() => shadowenv_name => "env/get" => fn env_get(name: &str) -> res {
-        //     __shadowenv.env_get(name)
-        //         .map(|s| <String as Into<Value>>::into(s.to_string()))
-        //         .unwrap_or(Value::Unit)
-        // }}
 
         interp.scope().add_value_with_name("env/get", |name| Value::new_foreign_fn(name, move |ctx, args| {
             assert_args!(args, 1, name);
@@ -121,7 +100,7 @@ impl ShadowLang {
             Ok(Value::Unit)
         }));
 
-        interp.scope().add_value_with_name("env/remove-from-pathlist", |name| Value::new_foreign_fn(name, move |ctx, args| {
+        interp.scope().add_value_with_name("let", |name| Value::new_foreign_fn(name, move |ctx, args| {
             assert_args!(args, 2, name);
 
             let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
@@ -132,6 +111,22 @@ impl ShadowLang {
             shadowenv.remove_from_pathlist(name, value);
             Ok(Value::Unit)
         }));
+
+        {
+            let name = interp.scope().add_name("env/remove-from-pathlist");
+            let ffn = Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 2, name);
+
+                let value = ctx.scope().get_constant(shadowenv_name).expect("bug: shadowenv not defined");
+                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let name  = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+
+                shadowenv.remove_from_pathlist(name, value);
+                Ok(Value::Unit)
+            });
+            interp.scope().add_value(name, ffn);
+        }
 
         // TODO(burke): expand-path isn't even implemented
         let prelude = r#"
