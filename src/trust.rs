@@ -6,6 +6,7 @@ use signatory_dalek::{Ed25519Signer, Ed25519Verifier};
 
 use std::env;
 use std::ffi::OsString;
+use std::fs::OpenOptions;
 use std::fs::{self, File};
 use std::io::{prelude::*, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -96,17 +97,19 @@ pub fn run() -> Result<(), Error> {
     let pubkey = signer.public_key().unwrap();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
-    let path = format!(".shadowenv.d/trust-{}", fingerprint);
+    let path = root.join(format!("trust-{}", fingerprint));
 
     let mut file = match File::create(OsString::from(&path)) {
         // TODO: error type
-        Err(why) => panic!("couldn't create {}: {}", path, why),
+        Err(why) => panic!("couldn't create {:?}: {}", path, why),
         Ok(file) => file,
     };
 
+    write_gitignore(root)?;
+
     match file.write_all(sig.as_bytes()) {
         // TODO: error type
-        Err(why) => panic!("couldn't write to {}: {}", path, why),
+        Err(why) => panic!("couldn't write to {:?}: {}", path, why),
         Ok(_) => Ok(()),
     }
 }
@@ -117,4 +120,29 @@ fn from_vec(vec: Vec<u8>) -> [u8; 64] {
     let bytes = &bytes[..array.len()]; // panics if not enough data
     array.copy_from_slice(bytes);
     array
+}
+
+fn write_gitignore(root: PathBuf) -> Result<(), Error> {
+    let path = root.join(".gitignore");
+
+    let mut file = match File::create(OsString::from(&path)) {
+        // TODO: error type
+        Err(why) => panic!("couldn't create {:?}: {}", &path, why),
+        Ok(file) => file,
+    };
+
+    let r: Result<String, Error> = match fs::read_to_string(&path) {
+        Ok(s) => Ok(s),
+        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok("".to_string()),
+        Err(e) => Err(e.into()),
+    };
+    let gitignore = r?;
+
+    let re = regex::Regex::new("^trust-\\*$").unwrap();
+    if !re.is_match(&gitignore) {
+        let mut file = OpenOptions::new().append(true).create(true).open(path)?;
+        file.write_all(b"trust-*\n")?;
+    }
+
+    Ok(())
 }

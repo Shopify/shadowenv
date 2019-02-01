@@ -5,5 +5,3 @@
 * Write man(1) documentation
 * Write man(5) documentation
 * Tests, tests, tests...
-* automatically create .shadowenv.d when running trust
-* automatically gitignore .shadowenv.d/trust-* when running trust
