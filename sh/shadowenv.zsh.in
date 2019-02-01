@@ -1,5 +1,5 @@
-shadowenv-auto() {
-  eval "$("{{self}}" hook "${__shadowenv_data}")"
+__shadowenv_hook() {
+  eval "$("@SELF@" hook "${__shadowenv_data}")"
 }
 
 # Hookbook (https://github.com/Shopify/hookbook)
@@ -101,4 +101,4 @@ unset __hookbook_shellname
 
 ## End of hookbook
 
-hookbook_add_hook shadowenv-auto
+hookbook_add_hook __shadowenv_hook

@@ -1,0 +1,6 @@
+function __shadowenv_hook --on-event fish_prompt --on-variable PWD
+  @SELF@ hook --fish "$__shadowenv_data" \
+    | while read line
+      eval "$line" 2>/shadowenv/null
+    end
+end
