@@ -3,9 +3,8 @@ use std::path::PathBuf;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
-pub fn run(selfpath: &str, shellname: &str) -> i32 {
-    let pb = PathBuf::from(selfpath);
-    let pb = fs::canonicalize(pb).unwrap(); // this would be... an unusual failure.
+pub fn run(shellname: &str) -> i32 {
+    let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
     match shellname.as_ref() {
         "bash" => print_script(pb, include_bytes!("../sh/shadowenv.bash.in")),
         "zsh" => print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),

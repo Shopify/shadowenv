@@ -82,9 +82,8 @@ fn main() {
             trust::run();
         }
         ("init", Some(matches)) => {
-            let argv0: String = env::args().next().unwrap();
             let shellname = matches.subcommand_name().unwrap();
-            process::exit(init::run(argv0.as_ref(), shellname));
+            process::exit(init::run(shellname));
         }
         _ => {
             panic!("subcommand was required by config but somehow none was provided");
