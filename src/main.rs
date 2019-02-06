@@ -24,11 +24,9 @@ mod trust;
 mod undo;
 
 use clap::{App, AppSettings, Arg, SubCommand};
-use std::env;
 use std::process;
 
 use crate::hook::VariableOutputMode;
-use crate::trust::NotTrusted;
 
 fn main() {
     let app_matches = App::new("shadowenv")
@@ -42,6 +40,11 @@ fn main() {
                     Arg::with_name("fish")
                         .long("fish")
                         .help("Format variable assignments for fish shell"),
+                )
+                .arg(
+                    Arg::with_name("porcelain")
+                        .long("porcelain")
+                        .help("Format variable assignments for machine parsing"),
                 ),
         )
         .subcommand(
@@ -70,9 +73,12 @@ fn main() {
     match app_matches.subcommand() {
         ("hook", Some(matches)) => {
             let data = matches.value_of("$__shadowenv_data").unwrap();
-            let mode = match matches.is_present("fish") {
-                true => VariableOutputMode::FishMode,
-                false => VariableOutputMode::PosixMode,
+            let mode = match matches.is_present("porcelain") {
+                true => VariableOutputMode::PorcelainMode,
+                false => match matches.is_present("fish") {
+                    true => VariableOutputMode::FishMode,
+                    false => VariableOutputMode::PosixMode,
+                },
             };
             if let Err(err) = hook::run(data, mode) {
                 handle_hook_error(err);

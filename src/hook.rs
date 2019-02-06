@@ -14,6 +14,7 @@ use serde_json;
 
 pub enum VariableOutputMode {
     FishMode,
+    PorcelainMode,
     PosixMode,
 }
 
@@ -75,12 +76,8 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             println!("__shadowenv_data={}", shadowenv_data);
             for (k, v) in shadowenv.exports() {
                 match v {
-                    Some(s) => {
-                        println!("export {}={:?}", k, s);
-                    }
-                    None => {
-                        println!("unset {}", k);
-                    }
+                    Some(s) => println!("export {}={:?}", k, s),
+                    None => println!("unset {}", k),
                 }
             }
         }
@@ -97,6 +94,21 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
                     None => {
                         println!("set -e {}", k);
                     }
+                }
+            }
+        }
+        VariableOutputMode::PorcelainMode => {
+            // three fields: <operation> : <name> : <value>
+            // opcodes: 1: set, unexported
+            //          2: set, exported
+            //          3: unset (value is empty)
+            // field separator is 0x1F; record separator is 0x1E. There's a trailing record
+            // separator because I'm lazy but don't depend on it not going away.
+            print!("\x01\x1F__shadowenv_data\x1F{}\x1E", shadowenv_data);
+            for (k, v) in shadowenv.exports() {
+                match v {
+                    Some(s) => print!("\x02\x1F{}\x1F{}\x1E", k, s),
+                    None => print!("\x03\x1F{}\x1F\x1E", k),
                 }
             }
         }
