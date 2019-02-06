@@ -12,3 +12,5 @@
 * Write man(1) documentation
 * Write man(5) documentation
 * Tests, tests, tests...
+* Preserve ordering when re-inserting removed items in lists
+* Add `shadowenv info` to show visual display of new/old items

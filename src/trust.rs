@@ -125,12 +125,6 @@ fn from_vec(vec: Vec<u8>) -> [u8; 64] {
 fn write_gitignore(root: PathBuf) -> Result<(), Error> {
     let path = root.join(".gitignore");
 
-    let mut file = match File::create(OsString::from(&path)) {
-        // TODO: error type
-        Err(why) => panic!("couldn't create {:?}: {}", &path, why),
-        Ok(file) => file,
-    };
-
     let r: Result<String, Error> = match fs::read_to_string(&path) {
         Ok(s) => Ok(s),
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok("".to_string()),
@@ -138,7 +132,7 @@ fn write_gitignore(root: PathBuf) -> Result<(), Error> {
     };
     let gitignore = r?;
 
-    let re = regex::Regex::new("^trust-\\*$").unwrap();
+    let re = regex::Regex::new(r"(?m)^(trust-)?\*$").unwrap();
     if !re.is_match(&gitignore) {
         let mut file = OpenOptions::new().append(true).create(true).open(path)?;
         file.write_all(b"trust-*\n")?;

@@ -111,41 +111,43 @@ impl ShadowLang {
                 })
             });
 
-        interp.scope().add_value_with_name("let", |name| {
-            Value::new_foreign_fn(name, move |ctx, args| {
-                assert_args!(args, 2, name);
+        interp
+            .scope()
+            .add_value_with_name("env/remove-from-pathlist", |name| {
+                Value::new_foreign_fn(name, move |ctx, args| {
+                    assert_args!(args, 2, name);
 
-                let value = ctx
-                    .scope()
-                    .get_constant(shadowenv_name)
-                    .expect("bug: shadowenv not defined");
-                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                    let value = ctx
+                        .scope()
+                        .get_constant(shadowenv_name)
+                        .expect("bug: shadowenv not defined");
+                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                shadowenv.remove_from_pathlist(name, value);
-                Ok(Value::Unit)
-            })
-        });
-
-        {
-            let name = interp.scope().add_name("env/remove-from-pathlist");
-            let ffn = Value::new_foreign_fn(name, move |ctx, args| {
-                assert_args!(args, 2, name);
-
-                let value = ctx
-                    .scope()
-                    .get_constant(shadowenv_name)
-                    .expect("bug: shadowenv not defined");
-                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
-                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
-
-                shadowenv.remove_from_pathlist(name, value);
-                Ok(Value::Unit)
+                    shadowenv.remove_from_pathlist(name, value);
+                    Ok(Value::Unit)
+                })
             });
-            interp.scope().add_value(name, ffn);
-        }
+
+        interp
+            .scope()
+            .add_value_with_name("env/remove-from-pathlist-containing", |name| {
+                Value::new_foreign_fn(name, move |ctx, args| {
+                    assert_args!(args, 2, name);
+
+                    let value = ctx
+                        .scope()
+                        .get_constant(shadowenv_name)
+                        .expect("bug: shadowenv not defined");
+                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+
+                    shadowenv.remove_from_pathlist_containing(name, value);
+                    Ok(Value::Unit)
+                })
+            });
 
         // TODO(burke): expand-path isn't even implemented
         let prelude = r#"

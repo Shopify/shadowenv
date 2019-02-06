@@ -89,7 +89,10 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => {
-                        println!("set -g {} {:?}", k, s);
+                        // TODO(burke): it looks like we had to do some weird shit in dev to
+                        // accommodate fish's weird handling of PATH. we'll probably have to re-do
+                        // it here.
+                        println!("set -gx {} {:?}", k, s);
                     }
                     None => {
                         println!("set -e {}", k);
