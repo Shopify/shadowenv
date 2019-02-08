@@ -1,6 +1,7 @@
 name: shadowenv
 
 up:
+  - homebrew: ["hugo"]
   - rust: nightly-2018-12-26
 
 commands:

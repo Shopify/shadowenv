@@ -1,0 +1,4 @@
+baseURL = "https://shopify.github.io/shadowenv"
+languageCode = "en-us"
+title = "Shadowenv"
+theme = "docuapi"
