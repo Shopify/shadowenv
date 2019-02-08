@@ -28,9 +28,8 @@ In many modern Lisp dialects, forms like like `let` take a variable number of bo
 implicit `do`). This is not the case in Shadowlisp, and you will find yourself having to explicitly
 use `do` from time to time.
 
-The remainder of this page is API documentation. The bread and butter of Shadowlisp is the
-*Environment Interaction* section, since manipulating the environment is the only possible
-side-effect in Shadowlisp. The rest of the API is only useful in support of setting environment
+The remainder of this page is API documentation. The bread and butter of Shadowlisp is the functions
+beginning with `env/*`. The rest of the API is only useful in support of manipulating environment
 variables.
 
 # env/get
