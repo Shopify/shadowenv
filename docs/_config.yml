@@ -1,0 +1,45 @@
+# Theme settings
+doks:
+  baseurl: https://shopify.github.io/shadowenv
+  color_theme: # Available themes: blue (default), green, purple, red and yellow
+  header:
+    logo:
+      text: |
+        S<span style="opacity:0.95">h</span><span style="opacity:0.9">a</span><span style="opacity:0.85">d</span><span style="opacity:0.8">o</span><span style="opacity:0.75">w</span><span style="opacity:0.7">e</span><span style="opacity:0.65">n</span><span style="opacity:0.6">v</span>
+      image:
+    nav:
+      - item_name: Getting Started
+        item_url: /getting-started
+      - item_name: Shadowlisp
+        item_url: /shadowlisp
+      - item_name: Best Practices
+        item_url: /best-practcies
+      - item_name: Trust
+        item_url: /trust
+  footer:
+    content:
+      logo:
+        text: |
+          S<span style="opacity:0.95">h</span><span style="opacity:0.9">a</span><span style="opacity:0.85">d</span><span style="opacity:0.8">o</span><span style="opacity:0.75">w</span><span style="opacity:0.7">e</span><span style="opacity:0.65">n</span><span style="opacity:0.6">v</span>
+        image:
+      copyright: "&copy;2019 Shopify"
+    social_list:
+      - network_name: github
+        profile_url: 'https://github.com/Shopify'
+      - network_name: twitter
+        profile_url: 'https://twitter.com/shopifyeng'
+  google_analytics:
+    tracking_code: # Add your Google Analytics tracking code to activate Google Analytics
+  comments:
+    disqus_forum_shortname: # Add your disqus forum shortname to activate comments
+
+# SASS settings
+sass:
+  sass_dir: ./doks-theme/_sass
+  style: :compressed
+
+# Jekyll settings
+layouts_dir: ./doks-theme/_layouts
+includes_dir: ./doks-theme/_includes
+exclude: [ 'README.md', 'CHANGELOG.md' ]
+permalink: /:title/
