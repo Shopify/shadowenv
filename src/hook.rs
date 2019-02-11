@@ -66,14 +66,12 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 
     let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
     let final_data = shadowenv.shadowenv_data();
-    let shadowenv_data = format!(
-        "{:?}",
-        format!("{:016x}:", target_hash).to_string() + &serde_json::to_string(&final_data)?
-    );
+    let shadowenv_data =
+        format!("{:016x}:", target_hash).to_string() + &serde_json::to_string(&final_data)?;
 
     match mode {
         VariableOutputMode::PosixMode => {
-            println!("__shadowenv_data={}", shadowenv_data);
+            println!("__shadowenv_data={:?}", shadowenv_data);
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => println!("export {}={:?}", k, s),
@@ -82,7 +80,7 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             }
         }
         VariableOutputMode::FishMode => {
-            println!("set __shadowenv_data {}", shadowenv_data);
+            println!("set __shadowenv_data {:?}", shadowenv_data);
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => {
