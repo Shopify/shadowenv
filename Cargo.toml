@@ -4,9 +4,9 @@ version = "0.1.1"
 authors = ["Burke Libbey <burke@libbey.me>"]
 edition = "2018"
 
+
 [dependencies]
 blake2 = "0.8.0"
-oxischeme = "0.0.3"
 ketos = "0.10"
 ketos_derive = "0.10"
 serde_json = "1.0.37"
