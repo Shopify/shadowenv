@@ -23,7 +23,9 @@ page_nav:
   <p>While you can expect Shadowenv to more or less work, it's very new, and we're still ironing out a lot of bugs. Caveat Emptor.</p>
 </div>
 
-Shadowenv isn't yet packaged in any package managers. For the moment, you'll need to build it from source.
+**On macOS, all you have to do is [download the binary from
+GitHub](https://github.com/Shopify/shadowenv/releases) and drop it somewhere on your path.** If this
+build isn't right for your architecture, the only other option for now is to build it manually from source.
 
 ## Building from Source
 
