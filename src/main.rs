@@ -9,6 +9,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate failure;
 extern crate clap;
+extern crate dirs;
 extern crate hex;
 extern crate regex;
 extern crate signatory;

@@ -55,9 +55,9 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
 }
 
 fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
-    let path = "/tmp/shadowenv-key";
+    let path = format!("{}/.config/shadowenv/trust-key", std::env::var("HOME")?);
 
-    let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(path)) {
+    let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(&path)) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
@@ -70,6 +70,7 @@ fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
         None => {
             let seed = ed25519::Seed::generate();
 
+            std::fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
             let mut file = match File::create(OsString::from(&path)) {
                 // TODO: error type
                 Err(why) => panic!("couldn''t write to {}: {}", path, why),
