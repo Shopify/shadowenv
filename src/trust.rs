@@ -73,8 +73,10 @@ fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
             let mut file = match File::create(OsString::from(&path)) {
                 // TODO: error type
                 Err(why) => panic!("couldn''t write to {}: {}", path, why),
-                Ok(_) => (),
+                Ok(f) => f,
             };
+
+            file.write(seed.as_secret_slice())?;
 
             Ok(Ed25519Signer::from(&seed))
         }
