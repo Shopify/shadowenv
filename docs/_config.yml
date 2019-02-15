@@ -13,7 +13,7 @@ doks:
       - item_name: Shadowlisp
         item_url: /shadowlisp
       - item_name: Best Practices
-        item_url: /best-practcies
+        item_url: /best-practices
       - item_name: Trust
         item_url: /trust
   footer:
