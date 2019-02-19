@@ -30,10 +30,10 @@ us to do things like simulate `chruby reset` upon entry into a directory without
   (env/remove-from-pathlist "PATH" (path-concat ruby-root "bin"))
   (when-let ((gem-root (env/get "GEM_ROOT")))
     (env/remove-from-pathlist "PATH" (path-concat gem-root "bin"))
-    (env/remove-from-pathlist "GEM_PATH", gem-root))
+    (env/remove-from-pathlist "GEM_PATH" gem-root))
   (when-let ((gem-home (env/get "GEM_HOME")))
     (env/remove-from-pathlist "PATH" (path-concat gem-home "bin"))
-    (env/remove-from-pathlist "GEM_PATH", gem-home)))
+    (env/remove-from-pathlist "GEM_PATH" gem-home)))
 ```
 
 The intention isn't really for users to write these files directly, nor to commit them to
