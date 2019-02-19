@@ -67,7 +67,7 @@ cp target/release/shadowenv /usr/local/bin/shadowenv
 
 <div class="callout callout--info">
   <p><strong>Shell support</strong></p>
-  <p>We're not in principle against supporting other shells, but for not Shadowenv only works with bash, zsh, and fish.</p>
+  <p>We're not in principle against supporting other shells, but for now Shadowenv only works with bash, zsh, and fish.</p>
 </div>
 
 Shadowenv relies on a shell hook to make changes when you change directories. In order to use it,

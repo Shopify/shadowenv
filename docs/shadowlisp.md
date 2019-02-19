@@ -242,7 +242,7 @@ from the present working directory, and `~`.
   [ body ... ])
 ```
 
-`when-let` evaluates a some code if and only if a `let` binding, when run, assigns a non-`()` value
+`when-let` evaluates some code if and only if a `let` binding, when run, assigns a non-`()` value
 to the name.
 
 ```scheme
@@ -284,7 +284,7 @@ in which case, `if` will yield `()` when the condition is `false`.
 `(cond [ ( predicate branch ) ... ] [ ( else else-branch ) ] )`
 
 The `cond` operator evaluates a series of predicates and executes the branch
-for the first predicate which evaluates true. The name `else` may be used for
+for the first predicate which evaluates to true. The name `else` may be used for
 the last case, as a catch-all branch.
 
 ```scheme
