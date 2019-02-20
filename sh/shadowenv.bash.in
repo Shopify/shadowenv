@@ -1,5 +1,5 @@
 __shadowenv_hook() {
-  eval "$("@SELF@" hook "${__shadowenv_data}")"
+  "@SELF@" hook "${__shadowenv_data}" | source /dev/stdin
 }
 
 # Hookbook (https://github.com/Shopify/hookbook)
