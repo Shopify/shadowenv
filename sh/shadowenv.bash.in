@@ -1,5 +1,9 @@
 __shadowenv_hook() {
-  "@SELF@" hook "${__shadowenv_data}" | source /dev/stdin
+  local flags; flags=()
+  if [[ "$1" == "bash-debug" ]]; then
+    flags=(--silent)
+  fi
+  "@SELF@" hook "${flags[@]}" "${__shadowenv_data:-}" | source /dev/stdin
 }
 
 # Hookbook (https://github.com/Shopify/hookbook)
