@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell

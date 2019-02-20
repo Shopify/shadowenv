@@ -183,7 +183,7 @@ fn env_remove_from_pathlist_containing(
     b: String,
 ) -> () {
     let curr = env.get(&a).cloned().unwrap_or("".to_string());
-    let mut items = curr.split(":").collect::<Vec<&str>>();
+    let items = curr.split(":").collect::<Vec<&str>>();
 
     let items = items.into_iter().skip_while(|x| (*x).contains(&b));
     let items: Vec<&str> = items.collect();
