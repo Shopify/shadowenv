@@ -21,7 +21,11 @@ fn cooldown() -> Duration {
     Duration::new(COOLDOWN_SECONDS, 0)
 }
 
-pub fn handle_hook_error(err: Error) -> i32 {
+pub fn handle_hook_error(err: Error, silent: bool) -> i32 {
+    if silent {
+        return 1;
+    }
+
     if let Ok(true) = check_and_trigger_cooldown(&err) {
         return 1;
     };

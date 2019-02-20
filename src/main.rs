@@ -53,6 +53,11 @@ fn main() {
                         .help("Format variable assignments for fish shell"),
                 )
                 .arg(
+                    Arg::with_name("silent")
+                        .long("silent")
+                        .help("Suppress error printing"),
+                )
+                .arg(
                     Arg::with_name("porcelain")
                         .long("porcelain")
                         .help("Format variable assignments for machine parsing"),
@@ -92,7 +97,7 @@ fn main() {
                 },
             };
             if let Err(err) = hook::run(data, mode) {
-                process::exit(output::handle_hook_error(err));
+                process::exit(output::handle_hook_error(err, matches.is_present("silent")));
             }
         }
         ("trust", Some(_)) => {
