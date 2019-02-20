@@ -99,7 +99,6 @@ pub fn run() -> Result<(), Error> {
     let pubkey = signer.public_key().unwrap();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
-    // let path = root.join(format!("trust-{}", fingerprint));
     let path = trust_file(&root, fingerprint);
 
     let mut file = match File::create(OsString::from(&path)) {
