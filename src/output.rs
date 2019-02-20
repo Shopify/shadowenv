@@ -96,16 +96,17 @@ fn clean_up_stale_errors(root: &PathBuf, timeout: Duration) -> Result<(), Error>
 }
 
 fn err_file(root: &PathBuf, errindex: u32) -> Result<PathBuf, Error> {
-    let ppid;
-    unsafe {
-        ppid = libc::getppid();
-    }
+    let ppid = unsafe_getppid()?;
+    Ok(root.join(format!(".error-{}-{}", errindex, ppid)))
+}
 
+fn unsafe_getppid() -> Result<i32, Error> {
+    let ppid;
+    unsafe { ppid = libc::getppid() }
     if ppid < 1 {
         return Err(format_err!("somehow failed to get ppid"));
     }
-
-    Ok(root.join(format!(".error-{}-{}", errindex, ppid)))
+    Ok(ppid)
 }
 
 // return value of Ok(true) indicates it's on cooldown and should be suppressed.
