@@ -35,7 +35,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
     let d = root.display().to_string();
     let msg = d.as_bytes();
 
-    let path = root.join(format!("trust-{}", fingerprint));
+    let path = trust_file(&root, fingerprint);
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
@@ -99,7 +99,7 @@ pub fn run() -> Result<(), Error> {
     let pubkey = signer.public_key().unwrap();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
-    let path = root.join(format!("trust-{}", fingerprint));
+    let path = trust_file(&root, fingerprint);
 
     let mut file = match File::create(OsString::from(&path)) {
         // TODO: error type
@@ -134,11 +134,19 @@ fn write_gitignore(root: PathBuf) -> Result<(), Error> {
     };
     let gitignore = r?;
 
-    let re = regex::Regex::new(r"(?m)^(trust-)?\*$").unwrap();
+    // is there a line reading one of: "*" "/*" ".*" "/.*" ?
+    // If the latter, we likely wrote this file already, but we also encourage users to gitignore
+    // *, so there's no need to clobber their changes if they've done so.
+    let re = regex::Regex::new(r"(?m)^/?\.?\*$").unwrap();
     if !re.is_match(&gitignore) {
         let mut file = OpenOptions::new().append(true).create(true).open(path)?;
-        file.write_all(b"trust-*\n")?;
+        // ignore all .*, except for .gitignore
+        file.write_all(b"/.*\n!/.gitignore\n")?;
     }
 
     Ok(())
+}
+
+fn trust_file(root: &PathBuf, fingerprint: String) -> PathBuf {
+    root.join(format!(".trust-{}", fingerprint))
 }

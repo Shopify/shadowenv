@@ -11,6 +11,7 @@ extern crate failure;
 extern crate clap;
 extern crate dirs;
 extern crate hex;
+extern crate libc;
 extern crate regex;
 extern crate signatory;
 extern crate signatory_dalek;
