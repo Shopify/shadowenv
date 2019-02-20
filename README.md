@@ -50,8 +50,8 @@ A `.shadowenv.d` will contain any number of `*.scm` files. These are evaluated i
 the OS returns when reading the directory: generally alphabetically. We *strongly* recommend using
 a prefix like `090_something.scm` to make it easy to maintain ordering.
 
-`.shadowenv.d` will also contain a `trust-<fingerprint>` file if it has been marked as trusted. (see
-the trust section later on).
+`.shadowenv.d` will also contain a `.trust-<fingerprint>` file if it has been marked as trusted. (see
+the trust section).
 
 ## Language
 
@@ -65,7 +65,7 @@ stuff downloaded from the internet to modify your `PATH`, for example.
 
 You can run `shadowenv trust` to mark a directory as trusted.
 
-Technically, running `shadowenv trust` will create a file at `.shadowenv.d/trust-<fingerprint>`,
-indicating that it's okay for `shadowenv` to run this code. The `.shadowenv.d/trust-*` file contains
+Technically, running `shadowenv trust` will create a file at `.shadowenv.d/.trust-<fingerprint>`,
+indicating that it's okay for `shadowenv` to run this code. The `.shadowenv.d/.trust-*` file contains
 a cryptographic signature of the directory path. The key is generated the first time `shadowenv` is
 run, and the fingerprint is an identifier for the key.
