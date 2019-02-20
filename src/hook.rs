@@ -1,6 +1,7 @@
 use crate::hash::{Hash, Source};
 use crate::lang::ShadowLang;
 use crate::loader;
+use crate::output;
 use crate::shadowenv::Shadowenv;
 use crate::undo;
 
@@ -53,14 +54,14 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 
     match target {
         Some(target) => {
-            print_activation(true);
+            output::print_activation(true);
             if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
                 // TODO: error type
                 panic!();
             }
         }
         None => {
-            print_activation(false);
+            output::print_activation(false);
         }
     }
 
@@ -113,15 +114,4 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
     }
 
     Ok(())
-}
-
-fn print_activation(activated: bool) {
-    let word = match activated {
-        true => "activated",
-        false => "deactivated",
-    };
-    let shadowenv = String::new()
-        + "\x1b[38;5;249ms\x1b[38;5;248mh\x1b[38;5;247ma\x1b[38;5;246md\x1b[38;5;245mo"
-        + "\x1b[38;5;244mw\x1b[38;5;243me\x1b[38;5;242mn\x1b[38;5;241mv\x1b[38;5;240m";
-    eprintln!("\x1b[1;34m{} {}.\x1b[0m", word, shadowenv);
 }
