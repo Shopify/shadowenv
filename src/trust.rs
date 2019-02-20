@@ -35,8 +35,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
     let d = root.display().to_string();
     let msg = d.as_bytes();
 
-    let path = format!(".shadowenv.d/trust-{}", fingerprint);
-    let path = Path::new(&path);
+    let path = root.join(format!("trust-{}", fingerprint));
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
