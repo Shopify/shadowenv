@@ -69,8 +69,3 @@ Technically, running `shadowenv trust` will create a file at `.shadowenv.d/trust
 indicating that it's okay for `shadowenv` to run this code. The `.shadowenv.d/trust-*` file contains
 a cryptographic signature of the directory path. The key is generated the first time `shadowenv` is
 run, and the fingerprint is an identifier for the key.
-
-## Usability
-
-Shadowenv is getting close to usable, however, there are still plenty of little bugs and rough
-edges. It might find some way to eat your lunch. caveat emptor.
