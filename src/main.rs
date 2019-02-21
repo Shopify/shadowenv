@@ -58,6 +58,14 @@ fn main() {
                         .help("Suppress error printing"),
                 )
                 .arg(
+                    // this is necessary if shadowenv hook is called from a subshell, as we do in
+                    // the bash hook
+                    Arg::with_name("shellpid")
+                        .long("shellpid")
+                        .takes_value(true)
+                        .help("rather than looking up the PPID, use this as the shell's pid"),
+                )
+                .arg(
                     Arg::with_name("porcelain")
                         .long("porcelain")
                         .help("Format variable assignments for machine parsing"),
@@ -89,6 +97,8 @@ fn main() {
     match app_matches.subcommand() {
         ("hook", Some(matches)) => {
             let data = matches.value_of("$__shadowenv_data").unwrap();
+            let shellpid = determine_shellpid_or_crash(matches.value_of("shellpid"));
+
             let mode = match matches.is_present("porcelain") {
                 true => VariableOutputMode::PorcelainMode,
                 false => match matches.is_present("fish") {
@@ -97,7 +107,11 @@ fn main() {
                 },
             };
             if let Err(err) = hook::run(data, mode) {
-                process::exit(output::handle_hook_error(err, matches.is_present("silent")));
+                process::exit(output::handle_hook_error(
+                    err,
+                    shellpid,
+                    matches.is_present("silent"),
+                ));
             }
         }
         ("trust", Some(_)) => {
@@ -114,4 +128,22 @@ fn main() {
             panic!("subcommand was required by config but somehow none was provided");
         }
     }
+}
+
+fn determine_shellpid_or_crash(arg: Option<&str>) -> u32 {
+    match arg {
+        Some(arg) => arg
+            .parse::<u32>()
+            .expect("shadowenv error: invalid non-numeric argument for --shellpid"),
+        None => unsafe_getppid().expect("shadowenv bug: unable to get parent pid"),
+    }
+}
+
+fn unsafe_getppid() -> Result<u32, failure::Error> {
+    let ppid;
+    unsafe { ppid = libc::getppid() }
+    if ppid < 1 {
+        return Err(format_err!("somehow failed to get ppid"));
+    }
+    Ok(ppid as u32)
 }
