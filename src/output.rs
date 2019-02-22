@@ -21,12 +21,12 @@ fn cooldown() -> Duration {
     Duration::new(COOLDOWN_SECONDS, 0)
 }
 
-pub fn handle_hook_error(err: Error, silent: bool) -> i32 {
+pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     if silent {
         return 1;
     }
 
-    if let Ok(true) = check_and_trigger_cooldown(&err) {
+    if let Ok(true) = check_and_trigger_cooldown(&err, shellpid) {
         return 1;
     };
     let err = backticks_to_bright_green(err);
@@ -51,7 +51,7 @@ fn backticks_to_bright_green(err: Error) -> String {
         .to_string()
 }
 
-fn check_and_trigger_cooldown(err: &Error) -> Result<bool, Error> {
+fn check_and_trigger_cooldown(err: &Error, shellpid: u32) -> Result<bool, Error> {
     // if no .shadowenv.d, then Err(_) just means no cooldown: always display error.
     let root = loader::find_root(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?
         .ok_or_else(|| format_err!("no .shadowenv.d"))?;
@@ -61,7 +61,7 @@ fn check_and_trigger_cooldown(err: &Error) -> Result<bool, Error> {
     let errindex =
         cooldown_index(err).ok_or_else(|| format_err!("error not subject to cooldown"))?;
 
-    let errfilepath = err_file(&root, errindex)?;
+    let errfilepath = err_file(&root, errindex, shellpid)?;
 
     match check_cooldown_sentinel(&errfilepath, cooldown()) {
         Ok(true) => Ok(true),
@@ -99,18 +99,8 @@ fn clean_up_stale_errors(root: &PathBuf, timeout: Duration) -> Result<(), Error>
     Ok(())
 }
 
-fn err_file(root: &PathBuf, errindex: u32) -> Result<PathBuf, Error> {
-    let ppid = unsafe_getppid()?;
-    Ok(root.join(format!(".error-{}-{}", errindex, ppid)))
-}
-
-fn unsafe_getppid() -> Result<i32, Error> {
-    let ppid;
-    unsafe { ppid = libc::getppid() }
-    if ppid < 1 {
-        return Err(format_err!("somehow failed to get ppid"));
-    }
-    Ok(ppid)
+fn err_file(root: &PathBuf, errindex: u32, shellpid: u32) -> Result<PathBuf, Error> {
+    Ok(root.join(format!(".error-{}-{}", errindex, shellpid)))
 }
 
 // return value of Ok(true) indicates it's on cooldown and should be suppressed.
