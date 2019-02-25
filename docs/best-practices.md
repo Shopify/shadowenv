@@ -20,15 +20,15 @@ page_nav:
 
 ## Naming files
 
-Shadowenv files must end in `.scm`, and must be in the `.shadowenv.d` directory. We additionally
+Shadowenv files must end in `.lisp`, and must be in the `.shadowenv.d` directory. We additionally
 *strongly* suggest that implementors name files with a three-digit decimal number prefix to enforce
 a load order, and leave plenty of space between the entries you create:
 
 ```
-050_base.scm
-500_node.scm
-510_ruby.scm
-900_user_config.scm
+050_base.lisp
+500_node.lisp
+510_ruby.lisp
+900_user_config.lisp
 ```
 
 ## Gitignore

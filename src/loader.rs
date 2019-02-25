@@ -23,7 +23,7 @@ pub fn find_root(at: PathBuf, relative_component: &str) -> Result<Option<PathBuf
     return Ok(None);
 }
 
-/// Load a shadowenv program from (generally) .shadowenv.d/*.scm. The returned Hash's source simply
+/// Load a shadowenv program from (generally) .shadowenv.d/*.lisp. The returned Hash's source simply
 /// concatenates all the files in order, but the hashsum is also dependent on the filenames.
 pub fn load(at: PathBuf, relative_component: &str) -> Result<Option<Source>, Error> {
     let mut source = Source::new();
@@ -39,7 +39,7 @@ pub fn load(at: PathBuf, relative_component: &str) -> Result<Option<Source>, Err
                 if path.is_file() {
                     // TODO: there HAS to  be a better way to do this.
                     let basename = path.file_name().unwrap().to_str().unwrap().to_string();
-                    if !basename.ends_with(".scm") {
+                    if !basename.ends_with(".lisp") {
                         continue;
                     }
                     let mut file = File::open(&path)?;

@@ -16,10 +16,10 @@ shadowenv init fish | source  # for fish
 ```
 
 With this code loaded, upon entering a directory containing a `.shadowenv.d` directory,
-any `*.scm` files in that directory will be executed and you will see "activated shadowenv." in your
+any `*.lisp` files in that directory will be executed and you will see "activated shadowenv." in your
 shell.
 
-The syntax for the `.shadowenv.d/*.scm` files is [Shadowlisp](https://shopify.github.io/shadowenv/),
+The syntax for the `.shadowenv.d/*.lisp` files is [Shadowlisp](https://shopify.github.io/shadowenv/),
 a minimal [Scheme-like](https://en.wikipedia.org/wiki/Scheme_(programming_language)) language.
 Unlike other tools like [direnv](https://direnv.net/), this has the interesting property of allowing
 us to do things like simulate `chruby reset` upon entry into a directory without the user having
@@ -46,9 +46,9 @@ directory as `.git`.
 
 We *strongly* recommend creating `gitignore`'ing everything under `.shadowenv.d` (`echo '*' > .shadowenv.d/.gitignore`).
 
-A `.shadowenv.d` will contain any number of `*.scm` files. These are evaluated in the order in which
+A `.shadowenv.d` will contain any number of `*.lisp` files. These are evaluated in the order in which
 the OS returns when reading the directory: generally alphabetically. We *strongly* recommend using
-a prefix like `090_something.scm` to make it easy to maintain ordering.
+a prefix like `090_something.lisp` to make it easy to maintain ordering.
 
 `.shadowenv.d` will also contain a `.trust-<fingerprint>` file if it has been marked as trusted. (see
 the trust section).
@@ -59,7 +59,7 @@ See https://shopify.github.io/shadowenv/ for Shadowlisp documentation.
 
 ## Trust
 
-If you `cd` into a directory containing `.shadowenv.d/*.scm` files, they will not be run and you
+If you `cd` into a directory containing `.shadowenv.d/*.lisp` files, they will not be run and you
 will see a message indicating so. This is for security reasons: we don't want to enable random
 stuff downloaded from the internet to modify your `PATH`, for example.
 

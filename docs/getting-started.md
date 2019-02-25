@@ -88,18 +88,18 @@ Shadowenv constantly scans your current directory, and all of its parents, for a
 `.shadowenv.d`. The nearest one wins, just like if you have nested git repositories.
 
 When a `.shadowenv.d` directory is found, Shadowenv first checks that you've [Trusted](/trust) it.
-Then, it looks for any files ending with `.scm` in that directory, and runs them as
+Then, it looks for any files ending with `.lisp` in that directory, and runs them as
 [Shadowlisp](/shadowlisp).
 
 Here's an example of what a Shadowlisp file might look like:
 
-<div class="example"> <code>.shadowenv.d/500_default.scm</code></div>
+<div class="example"> <code>.shadowenv.d/500_default.lisp</code></div>
 ```scheme
 (env/set "DEBUG" "1")
 (env/prepend-to-pathlist "PATH" "./bin")
 ```
 
-If you try creating an empty `.shadowenv.d`, and then adding that content to a `*.scm` file inside
+If you try creating an empty `.shadowenv.d`, and then adding that content to a `*.lisp` file inside
 it, you'll get an error back about an "untrusted" shadowenv. In order to fix this, run:
 
 ```bash
