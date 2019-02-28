@@ -79,6 +79,10 @@ case "${__hookbook_shellname}" in
     # does the same on linux. /dev/null has a major number of 3 on macOS and 1
     # on linux, and /dev/stderr==/dev/fd/2 has a different number when
     # connected to a TTY (but /dev/fd/2 is a symlink on linux).
+    #
+    # Further, the DEBUG trap fires during the rendering of PROMPT_COMMAND, but
+    # we gain nothing from running it in these cases because we already attach
+    # to PROMPT_COMMAND.
     if [[ "$(uname -s)" == "Darwin" ]]; then
       __dev_null_major="$(stat -f "%Hr" "/dev/null")"
       __stat_stderr='stat -f "%Hr" /dev/fd/2'
@@ -87,7 +91,9 @@ case "${__hookbook_shellname}" in
       __stat_stderr='stat -c "%t" "$(readlink -f "/dev/fd/2")"'
     fi
     eval "__hookbook_debug_handler() {
-      if [[ \"\$(${__stat_stderr})\" == \"${__dev_null_major}\" ]]; then
+      if [[ \"\${BASH_COMMAND}\" == \"\${PROMPT_COMMAND}\" ]]; then
+        return
+      elif [[ \"\$(${__stat_stderr})\" == \"${__dev_null_major}\" ]]; then
         return
       fi
       for fn in \"\${__hookbook_functions[@]}\"; do
