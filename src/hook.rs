@@ -53,19 +53,17 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
         None => 0,
     };
 
-    match target {
+    let activation = match target {
         Some(target) => {
-            output::print_activation(true);
             if let Err(_) = ShadowLang::run_program(shadowenv.clone(), target) {
                 // no need to return anything descriptive here since we already had ketos print it
                 // to stderr.
                 return Err(lang::ShadowlispError {}.into());
             }
+            true
         }
-        None => {
-            output::print_activation(false);
-        }
-    }
+        None => false,
+    };
 
     let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
     let final_data = shadowenv.shadowenv_data();
@@ -115,5 +113,6 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
         }
     }
 
+    output::print_activation(activation);
     Ok(())
 }
