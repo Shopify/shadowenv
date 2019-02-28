@@ -1,4 +1,5 @@
 use crate::hash::{Hash, Source};
+use crate::lang;
 use crate::lang::ShadowLang;
 use crate::loader;
 use crate::output;
@@ -55,9 +56,10 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
     match target {
         Some(target) => {
             output::print_activation(true);
-            if let Err(_err) = ShadowLang::run_program(shadowenv.clone(), target) {
-                // TODO: error type
-                panic!();
+            if let Err(_) = ShadowLang::run_program(shadowenv.clone(), target) {
+                // no need to return anything descriptive here since we already had ketos print it
+                // to stderr.
+                return Err(lang::ShadowlispError {}.into());
             }
         }
         None => {

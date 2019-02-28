@@ -7,6 +7,10 @@ use std::rc::Rc;
 
 pub struct ShadowLang {}
 
+#[derive(Fail, Debug)]
+#[fail(display = "error while evaluating shadowlisp")]
+pub struct ShadowlispError;
+
 macro_rules! ketos_fn2 {
     ( $scope:expr => $name:expr => fn $ident:ident
             (...) -> $res:ty ) => {
@@ -166,8 +170,7 @@ impl ShadowLang {
                 eprintln!("");
                 interp.display_trace(&trace);
             }
-            // TODO: error type?
-            panic!();
+            return Err(err);
         };
 
         for source_file in &source.files {
@@ -181,7 +184,7 @@ impl ShadowLang {
                     eprintln!("");
                     interp.display_trace(&trace);
                 }
-                return Ok(());
+                return Err(err);
             };
         }
 
@@ -194,7 +197,7 @@ impl ShadowLang {
                     eprintln!("");
                     interp.display_trace(&trace);
                 }
-                return Ok(());
+                return Err(err);
             };
         }
 
