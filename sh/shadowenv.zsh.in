@@ -48,16 +48,12 @@ case "${__hookbook_shellname}" in
       local fn=$1
 
       eval "
-        __hookbook_${fn}_preexec() { ${fn} zsh-preexec }
-        __hookbook_${fn}_chpwd()   { ${fn} zsh-chpwd }
-        __hookbook_${fn}_precmd()  { ${fn} zsh-precmd }
+        __hookbook_${fn}_preexec() { ${fn} preexec }
+        __hookbook_${fn}_precmd()  { ${fn} precmd }
       "
 
       __hookbook_array_contains "__hookbook_${fn}_preexec" "${preexec_functions[@]}" \
         || preexec_functions+=("__hookbook_${fn}_preexec")
-
-      __hookbook_array_contains "__hookbook_${fn}_chpwd" "${chpwd_functions[@]}" \
-        || chpwd_functions+=("__hookbook_${fn}_chpwd")
 
       __hookbook_array_contains "__hookbook_${fn}_precmd" "${precmd_functions[@]}" \
         || precmd_functions+=("__hookbook_${fn}_precmd")
@@ -65,7 +61,7 @@ case "${__hookbook_shellname}" in
 
     ;;
   bash)
-    if declare -p __hookbook_functions >/dev/null 2>&1; then
+    if ! declare -p __hookbook_functions >/dev/null 2>&1; then
       __hookbook_functions=()
     fi
 
@@ -95,7 +91,7 @@ case "${__hookbook_shellname}" in
         return
       fi
       for fn in \"\${__hookbook_functions[@]}\"; do
-        \${fn} bash-debug
+        \${fn} preexec
       done
     }"
     unset __stat_stderr
@@ -132,8 +128,8 @@ case "${__hookbook_shellname}" in
         # in the DEBUG trap above.
         PROMPT_COMMAND="{
           if [[ \$- =~ x ]];
-          then set +x; ${fn} bash-prompt 2>&3; set -x;
-          else ${fn} bash-prompt 2>&3;
+          then set +x; ${fn} precmd 2>&3; set -x;
+          else ${fn} precmd 2>&3;
           fi;
         } 4>&2 2>/dev/null 3>&4;
         ${PROMPT_COMMAND}"
@@ -152,6 +148,6 @@ esac
 unset __hookbook_shell
 unset __hookbook_shellname
 
-## End of hookbook
+## End of hookbook.sh
 
 hookbook_add_hook __shadowenv_hook
