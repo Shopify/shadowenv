@@ -23,6 +23,7 @@ mod lang;
 mod loader;
 mod output;
 mod shadowenv;
+mod show;
 mod trust;
 mod undo;
 
@@ -72,6 +73,11 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("show")
+                .about("Display the environment with added and removed parts visually indicated")
+                .arg(Arg::with_name("$__shadowenv_data").required(true)),
+        )
+        .subcommand(
             SubCommand::with_name("trust")
                 .about("Mark this directory as 'trusted', allowing shadowenv programs to be run"),
         )
@@ -116,6 +122,13 @@ fn main() {
         }
         ("trust", Some(_)) => {
             if let Err(err) = trust::run() {
+                eprintln!("{}", err); // TODO: better formatting
+                process::exit(1);
+            }
+        }
+        ("show", Some(matches)) => {
+            let data = matches.value_of("$__shadowenv_data").unwrap();
+            if let Err(err) = show::run(data) {
                 eprintln!("{}", err); // TODO: better formatting
                 process::exit(1);
             }

@@ -1,4 +1,4 @@
-use crate::hash::{Hash, Source};
+use crate::hash::Source;
 use crate::lang;
 use crate::lang::ShadowLang;
 use crate::loader;
@@ -9,7 +9,6 @@ use crate::undo;
 use std::env;
 use std::rc::Rc;
 use std::result::Result;
-use std::str::FromStr;
 
 use failure::Error;
 use serde_json;
@@ -21,31 +20,20 @@ pub enum VariableOutputMode {
 }
 
 pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
-    let mut parts = shadowenv_data.splitn(2, ":");
-    let prev_hash = parts.next();
-    let json_data = parts.next().unwrap_or("{}");
-
-    let active: Option<Hash> = match prev_hash {
-        None => None,
-        Some("") => None,
-        Some("0000000000000000") => None,
-        Some(x) => Some(Hash::from_str(x)?),
-    };
-
     let target: Option<Source> =
         loader::load(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
 
-    match (&active, &target) {
-        (None, None) => {
-            return Ok(());
-        }
-        (Some(a), Some(t)) if a.hash == t.hash()? => {
-            return Ok(());
-        }
-        (_, _) => (),
+    let (active, data) = undo::load_shadowenv_data(shadowenv_data)?;
+
+    let skip = match (&active, &target) {
+        (None, None) => true,
+        (Some(a), Some(t)) if a.hash == t.hash()? => true,
+        (_, _) => false,
+    };
+    if skip {
+        return Ok(());
     }
 
-    let data = undo::Data::from_str(json_data)?;
     let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data));
 
     let target_hash = match &target {

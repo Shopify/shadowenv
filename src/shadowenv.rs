@@ -6,13 +6,13 @@ use crate::undo;
 #[derive(Debug, ForeignValue, FromValueRef)]
 pub struct Shadowenv {
     /// the mutated/modified env: the final state we want to be in after eval'ing exports.
-    env: RefCell<HashMap<String, String>>,
+    pub env: RefCell<HashMap<String, String>>,
     /// the outer env, reconstructed by undoing $__shadowenv_data
-    unshadowed_env: HashMap<String, String>,
+    pub unshadowed_env: HashMap<String, String>,
     /// the env inherited from the calling process, untouched.
-    initial_env: HashMap<String, String>,
+    pub initial_env: HashMap<String, String>,
     /// names of variables which are treated as pathlists by the program
-    lists: RefCell<HashSet<String>>,
+    pub lists: RefCell<HashSet<String>>,
 }
 
 impl Shadowenv {
@@ -136,7 +136,7 @@ impl Shadowenv {
         self.lists.borrow_mut().insert(a.to_string());
     }
 
-    fn all_relevant_varnames(&self) -> HashSet<String> {
+    pub fn all_relevant_varnames(&self) -> HashSet<String> {
         let mut keys: HashSet<String> = HashSet::new();
 
         let env = self.env.borrow();
