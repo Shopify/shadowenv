@@ -81,14 +81,17 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             }
         }
         VariableOutputMode::FishMode => {
-            println!("set __shadowenv_data {:?}", shadowenv_data);
+            println!("set -g __shadowenv_data {:?}", shadowenv_data);
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => {
-                        // TODO(burke): it looks like we had to do some weird shit in dev to
-                        // accommodate fish's weird handling of PATH. we'll probably have to re-do
-                        // it here.
-                        println!("set -gx {} {:?}", k, s);
+                        if k == "PATH" {
+                            let pathlist = format!("{:?}", s);
+                            let pathlist = pathlist.replace(":", "\" \"");
+                            println!("set -gx {} {}", k, pathlist);
+                        } else {
+                            println!("set -gx {} {:?}", k, s);
+                        }
                     }
                     None => {
                         println!("set -e {}", k);
