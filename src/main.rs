@@ -16,6 +16,7 @@ extern crate regex;
 extern crate signatory;
 extern crate signatory_dalek;
 
+mod features;
 mod hash;
 mod hook;
 mod init;

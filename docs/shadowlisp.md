@@ -212,6 +212,28 @@ from the present working directory, and `~`.
 |---|---|
 | `String` | Expanded path |
 
+## `provide`
+
+`(provide feature [ version ])`
+
+
+```scheme
+(provide "ruby") ; activated shadowenv (ruby)
+(provide "ruby" "2.3.7") ; activated shadowenv (ruby:2.3.7)
+```
+
+Allows a script to advertise to the user which feature it is providing, with an optional version number.
+
+Multiple features with the same are allowed.
+
+| Argument | Type | Description |
+|---|---|---|
+| feature | `String` | Name of the provided feature |
+| version | `String` | Version of the provided feature. Optional. |
+
+| Return Type | Description |
+|---|---|
+| `None` | Always returns `()` |
 
 # Control Flow
 

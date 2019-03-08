@@ -1,6 +1,7 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
 
+use crate::features::Feature;
 use crate::undo;
 
 #[derive(Debug, ForeignValue, FromValueRef)]
@@ -13,6 +14,8 @@ pub struct Shadowenv {
     initial_env: HashMap<String, String>,
     /// names of variables which are treated as pathlists by the program
     lists: RefCell<HashSet<String>>,
+    /// list of features provided by all plugins
+    features: RefCell<HashSet<Feature>>,
 }
 
 impl Shadowenv {
@@ -24,6 +27,7 @@ impl Shadowenv {
             unshadowed_env: unshadowed_env,
             initial_env: env.clone(),
             lists: RefCell::new(HashSet::new()),
+            features: RefCell::new(HashSet::new()),
         }
     }
 
@@ -130,6 +134,16 @@ impl Shadowenv {
     pub fn prepend_to_pathlist(&self, a: &str, b: &str) -> () {
         self.inform_list(a);
         env_prepend_to_pathlist(&mut self.env.borrow_mut(), a.to_string(), b.to_string())
+    }
+
+    pub fn add_feature(&self, name: &str, version: Option<&str>) -> () {
+        let feature: Feature = Feature::new(name.to_string(), version.map(|s| s.to_string()));
+        self.features.borrow_mut().insert(feature);
+    }
+
+    pub fn features(&self) -> (HashSet<Feature>) {
+        // This is terribly innefficent, but it's a small data set
+        self.features.borrow().iter().cloned().collect()
     }
 
     fn inform_list(&self, a: &str) {
