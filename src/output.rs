@@ -38,9 +38,15 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
 
 pub fn print_activation(activated: bool, features: HashSet<Feature>) {
     if activated {
-        eprint!("\x1b[1;34mactivated {}\x1b[1;34m", SHADOWENV);
-        for feature in features {
-            eprint!(" ({})", feature);
+        if features.len() == 0 {
+            eprint!("\x1b[1;34mactivated {}", SHADOWENV);
+        } else {
+            let feature_list = features
+                .iter()
+                .map(|s| format!("{}", s))
+                .collect::<Vec<String>>()
+                .join(", ");
+            eprint!("\x1b[1;34mactivated {} \x1b[1;34m({})", SHADOWENV, feature_list);
         }
     } else {
         eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);

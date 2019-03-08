@@ -163,7 +163,6 @@ impl ShadowLang {
                         .expect("bug: shadowenv not defined");
                     let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
 
-                    let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let version = match args.len() {
                         1 => None,
                         2 => Some(<&str as FromValueRef>::from_value_ref(&args[1])?),
@@ -173,6 +172,7 @@ impl ShadowLang {
                             found: args.len() as u32,
                         })),
                     };
+                    let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
                     shadowenv.add_feature(feature, version);
                     Ok(Value::Unit)
