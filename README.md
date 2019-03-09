@@ -26,6 +26,8 @@ us to do things like simulate `chruby reset` upon entry into a directory without
 `chruby` installed (and undo these changes to the environment when `cd`'ing back out):
 
 ```scheme
+(provide "ruby")
+
 (when-let ((ruby-root (env/get "RUBY_ROOT")))
   (env/remove-from-pathlist "PATH" (path-concat ruby-root "bin"))
   (when-let ((gem-root (env/get "GEM_ROOT")))

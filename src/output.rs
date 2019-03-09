@@ -1,8 +1,10 @@
+use crate::features::Feature;
 use crate::loader;
 use crate::trust;
 
 use failure::Error;
 use regex::Regex;
+use std::collections::HashSet;
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
@@ -34,12 +36,22 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     return 1;
 }
 
-pub fn print_activation(activated: bool) {
-    let word = match activated {
-        true => "activated",
-        false => "deactivated",
-    };
-    eprintln!("\x1b[1;34m{} {}.\x1b[0m", word, SHADOWENV);
+pub fn print_activation(activated: bool, features: HashSet<Feature>) {
+    if activated {
+        if features.len() == 0 {
+            eprint!("\x1b[1;34mactivated {}", SHADOWENV);
+        } else {
+            let feature_list = features
+                .iter()
+                .map(|s| format!("{}", s))
+                .collect::<Vec<String>>()
+                .join(", ");
+            eprint!("\x1b[1;34mactivated {} \x1b[1;34m({})", SHADOWENV, feature_list);
+        }
+    } else {
+        eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);
+    }
+    eprintln!("\x1b[0m");
 }
 
 fn backticks_to_bright_green(err: Error) -> String {

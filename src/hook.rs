@@ -116,6 +116,6 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
         }
     }
 
-    output::print_activation(activation);
+    output::print_activation(activation, shadowenv.features());
     Ok(())
 }

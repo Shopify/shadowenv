@@ -6,4 +6,4 @@ up:
 commands:
   build:     cargo build
   test:      cargo test
-  run-built: target/debug/shadowenv ''
+  run-built: target/debug/shadowenv
