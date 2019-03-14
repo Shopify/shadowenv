@@ -19,8 +19,10 @@ pub fn run(shellname: &str) -> i32 {
 }
 
 fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
+    let hookbook = String::from_utf8_lossy(include_bytes!("../sh/hookbook.sh"));
     let script = String::from_utf8_lossy(bytes);
     let script = script.replace("@SELF@", selfpath.into_os_string().to_str().unwrap());
+    let script = script.replace("@HOOKBOOK@", &hookbook);
     println!("{}", script);
     0
 }
