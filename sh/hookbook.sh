@@ -53,8 +53,6 @@ __hookbook_call_each() {
     __hookbook_array_contains "__hookbook_${fn}_precmd" "${precmd_functions[@]}" \
       || precmd_functions+=("__hookbook_${fn}_precmd")
   }
-  \unset __hookbook_shell __hookbook_shellname
-  \return 0
 }
 
 [[ "${__hookbook_shellname}" == "bash" ]] && {
@@ -130,11 +128,14 @@ __hookbook_call_each() {
     __hookbook_array_contains "${fn}" "${__hookbook_functions[@]}" \
       || __hookbook_functions+=("${fn}")
   }
-  \unset __hookbook_shell __hookbook_shellname
-  \return 0
 }
 
->&2 \echo "hookbook is not compatible with your shell (${__hookbook_shell})"
-\return 1
+[[ "${__hookbook_shellname}" != "zsh" ]] && [[ "${__hookbook_shellname}" != "bash" ]] && {
+  >&2 \echo "hookbook is not compatible with your shell (${__hookbook_shell})"
+  \unset __hookbook_shell __hookbook_shellname
+  \return 1
+}
+
+\unset __hookbook_shell __hookbook_shellname
 
 ## End of hookbook.sh
