@@ -46,8 +46,16 @@ macro_rules! assert_args {
 
 impl ShadowLang {
     pub fn run_program(shadowenv: Rc<Shadowenv>, source: Source) -> Result<(), Error> {
+        let mut restrictions = ketos::RestrictConfig::strict();
+        // "Maximum size of value stack, in values"
+        // This also puts a cap on the size of string literals in a single function invocation.
+        // The default limit of 256 then means a limit of 256 bytes of string per invocation.
+        // We'll increase this to 8k, in case people want to embed an RSA cert or something (don't
+        // construe this as an endorsement of that plan).
+        restrictions.memory_limit = 8192;
+
         let interp = ketos::Builder::new()
-            .restrict(ketos::RestrictConfig::strict()) // shouldn't need much CPU or RAM
+            .restrict(restrictions)
             .io(Rc::new(ketos::GlobalIo::null())) // no printing
             .module_loader(Box::new(ketos::module::NullModuleLoader)) // nerf code loading
             .finish();
