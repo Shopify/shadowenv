@@ -131,6 +131,11 @@ impl Shadowenv {
         )
     }
 
+    pub fn append_to_pathlist(&self, a: &str, b: &str) -> () {
+        self.inform_list(a);
+        env_append_to_pathlist(&mut self.env.borrow_mut(), a.to_string(), b.to_string())
+    }
+
     pub fn prepend_to_pathlist(&self, a: &str, b: &str) -> () {
         self.inform_list(a);
         env_prepend_to_pathlist(&mut self.env.borrow_mut(), a.to_string(), b.to_string())
@@ -201,6 +206,15 @@ fn env_remove_from_pathlist_containing(
 
     let items = items.into_iter().skip_while(|x| (*x).contains(&b));
     let items: Vec<&str> = items.collect();
+    let next = items.join(":");
+    env.insert(a, next.to_string());
+    ()
+}
+
+fn env_append_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) -> () {
+    let curr = env.get(&a).cloned().unwrap_or("".to_string());
+    let mut items = curr.split(":").collect::<Vec<&str>>();
+    items.insert(items.len(), &b);
     let next = items.join(":");
     env.insert(a, next.to_string());
     ()
