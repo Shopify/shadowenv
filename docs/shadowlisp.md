@@ -113,6 +113,32 @@ If there are no items in the list currently, `env/prepend-to-pathlist` will simp
 |---|---|
 | `None` | Always returns `()` |
 
+## `env/append-to-pathlist`
+
+`(env/append-to-pathlist name entry)`
+
+```scheme
+(env/append-to-pathlist "PATH" "/opt/mytool/bin") ; ()
+```
+
+While less common than prepending, it's sometimes desirable to append an item to a `:`-delimited path (such as `PATH` or
+`MANPATH`), to add it as a lower priority option.  `env/append-to-pathlist` does precisely this, first removing the item
+from the path if it was already present, before appending it to the end of the pathlist.
+
+Strictly speaking, any variable can be treated as a pathlist by Shadowenv, but it only makes sense
+to do this for variables that other tools expect to contain multiple items.
+
+If there are no items in the list currently, `env/append-to-pathlist` will simply create the list with a single item.
+
+| Argument | Type | Description |
+|---|---|---|
+| name | `String` | Name of environment variable to change |
+| entry | `String` | String to append |
+
+| Return Type | Description |
+|---|---|
+| `None` | Always returns `()` |
+
 ## `env/remove-from-pathlist`
 
 ```scheme
@@ -125,8 +151,8 @@ If there are no items in the list currently, `env/prepend-to-pathlist` will simp
 (env/get "PATH") ; "/usr/bin:/bin"
 ```
 
-The counterpart to `env/prepend-to-pathlist` is this, `env-remove-from-pathlist`. This won't be as
-useful, since Shadowenv always takes care of its own deactivation, but you may occasionally want to
+The counterpart to `env/prepend-to-pathlist`/`env/append-to-pathlist` is this, `env-remove-from-pathlist`. This won't be
+as useful, since Shadowenv always takes care of its own deactivation, but you may occasionally want to
 deactivate certain system-wide configuration upon entry into a Shadowenv.
 
 If, after removing the indicated item from the specified pathlist, the variable becomes empty, it is

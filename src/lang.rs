@@ -106,6 +106,25 @@ impl ShadowLang {
 
         interp
             .scope()
+            .add_value_with_name("env/append-to-pathlist", |name| {
+                Value::new_foreign_fn(name, move |ctx, args| {
+                    assert_args!(args, 2, name);
+
+                    let value = ctx
+                        .scope()
+                        .get_constant(shadowenv_name)
+                        .expect("bug: shadowenv not defined");
+                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+
+                    shadowenv.append_to_pathlist(name, value);
+                    Ok(Value::Unit)
+                })
+            });
+
+        interp
+            .scope()
             .add_value_with_name("env/prepend-to-pathlist", |name| {
                 Value::new_foreign_fn(name, move |ctx, args| {
                     assert_args!(args, 2, name);
