@@ -1,3 +1,7 @@
+shadowenv() {
+  [[ "$1" == "diff" ]] && "@SELF@" "$@" "${__shadowenv_data:-}" || "@SELF@" "$@"
+}
+
 __shadowenv_hook() {
   local flags; flags=(--shellpid "$$")
   if [[ "$1" == "bash-debug" ]]; then
