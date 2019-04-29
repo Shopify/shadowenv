@@ -20,6 +20,7 @@ mod features;
 mod hash;
 mod hook;
 mod init;
+mod diff;
 mod lang;
 mod loader;
 mod output;
@@ -73,6 +74,22 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("diff")
+                .about("Display a diff of changed environment variables")
+                .arg(
+                    Arg::with_name("verbose")
+                    .long("verbose")
+                    .short("v")
+                    .help("Show all environment variables, not just those that changed"),
+                ).arg(
+                    Arg::with_name("no-color")
+                    .long("no-color")
+                    .short("n")
+                    .help("Do not use color to highlight the diff"),
+                )
+                .arg(Arg::with_name("$__shadowenv_data").required(true)),
+        )
+        .subcommand(
             SubCommand::with_name("trust")
                 .about("Mark this directory as 'trusted', allowing shadowenv programs to be run"),
         )
@@ -114,6 +131,12 @@ fn main() {
                     matches.is_present("silent"),
                 ));
             }
+        }
+        ("diff", Some(matches)) => {
+            let verbose = matches.is_present("verbose");
+            let color = !matches.is_present("no-color");
+            let data = matches.value_of("$__shadowenv_data").unwrap();
+            process::exit(diff::run(verbose, color, data));
         }
         ("trust", Some(_)) => {
             if let Err(err) = trust::run() {
