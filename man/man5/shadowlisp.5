@@ -1,0 +1,347 @@
+.TH SHADOWLISP 5
+.SH NAME
+\fBshadowlisp\fR \- a simple lisp dialect for writing \fIshadowenv\fR programs
+
+.SH SYNOPSIS
+\fBShadowlisp\fR is a simple Lisp dialect. It is a Lisp-1, meaning that all data types (functions and variables,
+notably) share a single namespace.
+
+To express nil/null/no-value in Shadowlisp, use an empty list (). This will be important to clear environment variables.
+
+
+.SH Environment Manipulation
+
+.SS \fB(env/get \fIname\fB)\fR
+The simplest function to interact with the environment is \fBenv/get\fR. It returns the current value of the variable at
+the point in the script at which it's evaluated, not the initial value.
+
+If the variable has no current value, \fB()\fR is returned instead of a String.
+
+.TP
+\fBname\fR
+\fI(String)\fR Name of environment variable to look up
+
+.TP
+\fBReturn\fR
+\fI(Option<String>)\fR Current value of variable, or \fB()\fR if unset
+
+.SS \fB(env/set \fIname value\fB)\fR
+The simplest form of mutation: \fBenv/set\fR changes the value of an environment variable while a Shadowenv is active.
+The previous value will be preserved so that it can be reactivated upon deactivating the Shadowenv.
+
+.TP
+\fBname\fR
+\fI(String)\fR Name of environment variable to change
+
+.TP
+\fBvalue\fR
+\fI(Option<String>)\fR String to set the variable to, or \fB()\fR to unset it.
+
+.TP
+\fBReturn\fR
+\fI(None)\fR Always returns \fB()\fR
+
+.SS \fB(env/prepend-to-pathlist \fIname entry\fB)\fR
+
+It's common to want to prepend an item to a \fB:\fR-delimited path (such as \fBPATH\fR or \fBMANPATH\fR).
+\fBenv/prepend-to-pathlist\fR does precisely this, first removing the item from the path if it was
+already present, before prepending it to the front of the pathlist.
+
+Strictly speaking, any variable can be treated as a pathlist by Shadowenv, but it only makes sense
+to do this for variables that other tools expect to contain multiple items.
+
+If there are no items in the list currently, \fBenv/prepend-to-pathlist\fR will simply create the list with a single item.
+
+.TP
+\fBname\fR
+\fI(String)\fR Name of environment variable to change
+
+.TP
+\fBentry\fR
+\fI(String)\fR String to prepend
+
+.TP
+\fBReturn\fR
+\fI(None)\fR Always returns \fB()\fR
+
+.SS \fB(env/append-to-pathlist \fIname entry\fB)\fR
+
+While less common than prepending, it's sometimes desirable to append an item to a \fB:\fR-delimited path (such as \fBPATH\fR or
+\fBMANPATH\fR), to add it as a lower priority option.  \fBenv/append-to-pathlist\fR does precisely this, first removing the item
+from the path if it was already present, before appending it to the end of the pathlist.
+
+Strictly speaking, any variable can be treated as a pathlist by Shadowenv, but it only makes sense
+to do this for variables that other tools expect to contain multiple items.
+
+If there are no items in the list currently, \fBenv/append-to-pathlist\fR will simply create the list with a single item.
+
+.TP
+\fBname\fR
+\fI(String)\fR Name of environment variable to change
+
+.TP
+\fBentry\fR
+\fI(String)\fR String to append
+
+
+.TP
+\fBReturn\fR
+\fI(None)\fR Always returns \fB()\fR
+
+.SS \fB(env/remove-from-pathlist \fIname entry\fB)\fR
+
+The counterpart to \fBenv/prepend-to-pathlist\fR/\fBenv/append-to-pathlist\fR is this, \fBenv-remove-from-pathlist\fR. This won't be
+as useful, since Shadowenv always takes care of its own deactivation, but you may occasionally want to
+deactivate certain system-wide configuration upon entry into a Shadowenv.
+
+If, after removing the indicated item from the specified pathlist, the variable becomes empty, it is
+unset (equivalent to \fB(env/set var ())\fR).
+
+.TP
+\fBname\fR
+\fI(String)\fR Name of environment variable to change
+
+.TP
+\fBentry\fR
+\fI(String)\fR String to remove from pathlist
+
+
+.TP
+\fBReturn\fR
+\fI(None)\fR Always returns \fB()\fR
+
+.SS \fB(env/remove-from-pathlist-containing \fIname substring\fB)\fR
+
+A specialized version of \fBenv/remove-from-pathlist\fR, \fBenv-remove-from-pathlist-containing\fR will
+remove any items from the pathlist which contain the provided value as a substring.
+
+.TP
+\fBname\fR
+\fI(String)\fR Name of environment variable to change
+
+.TP
+\fBsubstring\fR
+\fI(String)\fR Remove pathlist items containing this as a substring
+
+
+.TP
+\fBReturn\fR
+\fI(None)\fR Always returns \fB()\fR
+
+.SH Utilities
+
+.SS \fB(path-concat \fI[ strings ... ]\fB)\fR
+
+It's occasionally useful to take a subdirectory of a path found from some other variable.
+\fBpath-concat\fR joins two or more strings (representing directories) with slashes.
+
+.TP
+\fI:rest \fBstrings\fR
+\fI(String)\fR Any number of strings to conjoin with \fB/\fR
+
+
+.TP
+\fBReturn\fR
+\fI(String)\fR Joined path
+
+
+.SS \fB(expand-path \fIpath\fB)\fR
+
+\fBexpand-path\fR resolves a path to a canonicalized path, resolving any symlinks, relative references
+from the present working directory, and \fB~\fR.
+
+.TP
+\fBpath\fR
+\fI(String)\fR Path to expand
+
+
+.TP
+\fBReturn\fR
+\fI(String)\fR Expanded path
+
+.SS \fB(provide \fIfeature [ version ]\fB)\fR
+
+
+Allows a script to advertise to the user which feature it is providing, with an optional version number.
+
+Multiple features with the same are allowed.
+
+.TP
+\fBfeature\fR
+\fI(String)\fR Name of the provided feature
+
+.TP
+\fBversion\fR
+\fI(String)\fR Version of the provided feature. Optional.
+
+
+.TP
+\fBReturn\fR
+\fI(None)\fR Always returns \fB()\fR
+
+.SH Control Flow
+
+.SS \fB(when \fIcondition [ then ... ]\fB)\fR
+
+\fBwhen\fR tests a condition, evaluating the rest of its forms if and only if the condition is true.
+
+.TP
+\fBcondition\fR
+\fI(Expr)\fR If it evaluates to non-\fB()\fR, run *then*
+
+.TP
+\fI:rest \fBthen\fR
+\fI(Expr)\fR Evaluated if *condition* was true
+
+
+.TP
+\fBReturn\fR
+\fI(Any)\fR Whatever the return value of the last form in *then* was
+
+
+.SS \fB(when-let \fI( ( name expression ) ) [ body ... ]\fB)\fR
+
+\fBwhen-let\fR evaluates some code if and only if a \fBlet\fR binding, when run, assigns a non-\fB()\fR value
+to the name.
+
+.TP
+\fBname\fR
+\fI(String)\fR Name to assign
+
+.TP
+\fBexpression\fR
+\fI(Any)\fR Value to assign to name
+
+.TP
+\fI:rest \fBbody\fR
+\fI(Expr)\fR Evaluated if *name* was assigned to something non-\fB()\fR
+
+
+.TP
+\fBReturn\fR
+\fI(Any)\fR Whatever the return value of the last form in *body* was
+
+.SS \fB(if \fIcondition then-case [ else-case ]\fB)\fR
+
+The \fBif\fR operator evaluates its first argument, then evaluates only one of the
+given branches, depending on the result. The "else" branch may be omitted,
+in which case, \fBif\fR will yield \fB()\fR when the condition is \fBfalse\fR.
+
+.SS \fB(cond \fI[ ( predicate branch ) ... ] [ ( else else-branch ) ] \fB)\fR
+
+The \fBcond\fR operator evaluates a series of predicates and executes the branch
+for the first predicate which evaluates to true. The name \fBelse\fR may be used for
+the last case, as a catch-all branch.
+
+.SS \fB(do \fI[ expressions ... ]\fB)\fR
+
+
+The do operator executes multiple expressions and yields the value of the final expression. Useful
+for forms like \fBlet\fR, which only accept one form to evaluate.
+
+.TP
+\fI:rest \fBexpressions\fR
+\fI(Expr)\fR Always evaluated
+
+
+.TP
+\fBReturn\fR
+\fI(Any)\fR Whatever the return value of the last form in *expressions* was
+
+.SH Logic
+
+.SS \fB(eq \fIa b\fB)\fR
+
+Test whether two values are (weakly) equal. Shadowlisp does not support strict equality semantics.
+
+.SS \fB(ne \fIa b\fB)\fR
+
+Test whether two values are (weakly) unequal. Shadowlisp does not support strict equality semantics.
+
+.SS \fB(not \fIa\fB)\fR
+
+Boolean negation.
+
+.SS \fB(null \fIexpr\fB)\fR
+
+Returns true if and only if the provided argument is \fB()\fR.
+
+.SS \fB(and \fI[ expression ... ]\fB)\fR
+
+\fBand\fR evaluates its arguments, applying logical AND short-circuiting rules.
+
+.SS \fB(or \fI[ expression ... ]\fB)\fR
+
+\fBor\fR evaluates its arguments, applying logical OR short-circuiting rules.
+
+.SH Lists
+
+.SS \fB(append \fIlist value\fB)\fR
+
+\fBappend\fR appends a value to a list.
+
+.SS \fB(elt \fIlist n\fB)\fR
+
+\fBelt\fR returns the nth element of a list.
+
+.SS \fB(concat \fI[ list ... ]\fB)\fR
+
+\fBconcat\fR concatenates each given list value.
+
+.SS \fB(join \fIsep [ list ... ]\fB)\fR
+
+\fBjoin\fR joins together a series of lists using the first argument as separator.
+
+.SS \fB(first \fIlist\fB)\fR
+
+\fBfirst\fR returns the first element of a list.
+
+.SS \fB(last \fIlist\fB)\fR
+
+\fBlast\fR returns the last element of a list.
+
+.SS \fB(tail \fIlist\fB)\fR
+
+\fBtail\fR returns all elements after the first element of a list.
+
+.SS \fB(list \fI[ expr ... ]\fB)\fR
+
+\fBlist\fR evaluates each of its arguments and return them as a list.
+
+.SH Functions and Macros
+
+.SS \fB(define \fIname expression\fB)\fR
+
+The \fBdefine\fR operator adds a value or compiled function to the global scope.
+
+When defining a function, if the keyword \fB:optional\fR is present in the argument
+list, all following arguments will be optional. If the keyword \fB:key\fR is present,
+all following arguments will be optional keyword arguments. If the keyword
+\fB:rest\fR is present, the following name will contain any free arguments remaining.
+
+Optional and keyword arguments may be omitted when calling a function.
+If an optional or keyword value is not supplied its value will be \fB()\fR.
+A default value can be given when the function is defined.
+
+.SS \fB(macro \fI(name [ arguments ... ]) expression\fB)\fR
+
+The \fBmacro\fR operator defines a compile-time macro. A macro behaves in all
+respects as any other function, except that it is executed at compile time
+and is expected to return code which is then further compiled.
+
+.SS \fB(lambda \fI( [ arguments ... ] ) expression\fB)\fR
+
+The \fBlambda\fR operator creates a function which may enclose one or more local
+value bindings from the surrounding scope.
+
+.SS \fB(apply \fIfunction [ arguments ... ] argument-list\fB)\fR
+
+The \fBapply\fR operator calls a function with a given series of arguments.
+The argument list consists of any positional arguments except for the last
+argument to \fBapply\fR, plus the final, required list argument, which is
+concatenated to positional arguments.
+
+.SS \fB(let \fI( [ ( name expression ) ... ] ) body\fB)\fR
+
+The \fBlet\fR operator defines a series of local bindings for the duration of the
+execution of its body expression.

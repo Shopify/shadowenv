@@ -1,0 +1,64 @@
+.TH SHADOWENV 1
+.SH NAME
+shadowenv \- maninpulate environment variables as you change directories
+.SH SYNOPSIS
+\fBshadowenv\fR [\fB\-h\fR|\fB\-V\fR] \fIsubcommand\fR
+.SH DESCRIPTION
+\fBshadowenv\fR provides a way to perform a set of manipulations to the process environment upon entering a directory in a shell. These manipulations are reversed when leaving the directory, and there is some limited ability to make the manipulations dynamic.
+.SH SUBCOMMANDS
+.SS \fBdiff\fR [\fB\-hnv\fR]
+Display a diff of changed environment variables.
+
+.TP
+\fB\-n\fR, \fB\-\-no\-color\fR
+Do not use color to highlight the diff
+
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR
+Show all environment variables as context to the diff
+
+.SS \fBhook\fR [FLAGS] [OPTIONS] \fB$__shadowenv_data\fR
+Runs the shell hook. You shouldn't need to run this manually; instead, source the output of \fBshadowenv init\fR to create the shell hooks that will use this command.
+
+.TP
+\fB\-\-fish\fR
+Format variable assignments for fish shell
+
+.TP
+\fB\-\-porcelain\fR
+Format variable assignments for machine parsing
+
+.TP
+\fB\-\-silent\fR
+Suppress error printing
+
+.TP
+\fB\-\-shellpid\fR \fIpid\fR
+Rather than looking up the PPID, use this as the shell's pid
+
+.TP
+\fB$__shadowenv_data\fR
+The contents of the \fB$__shadowenv_data\fR environment variable
+
+.SS \fBinit\fR \fIshell\fR
+Prints a script which can be eval'd to set up shadowenv in various shells
+
+.TP
+\fBbash\fR
+Prints a script which can be eval'd by bash to set up shadowenv.
+
+.TP
+\fBfish\fR
+Prints a script which can be eval'd by fish to set up shadowenv.
+
+.TP
+\fBzsh\fR
+Prints a script which can be eval'd by zsh to set up shadowenv.
+
+.SS \fBtrust\fR
+Mark this directory as 'trusted', allowing shadowenv programs to be run
+.SH FLAGS
+.SS -h, --help
+Prints help information - can also be used for more specific help with any of the subcommands
+.SS -V, --version
+Prints the current shadowenv version
