@@ -7,3 +7,4 @@ commands:
   build:     cargo build
   test:      cargo test
   run-built: target/debug/shadowenv
+  add-man:   cp -r man/* /usr/local/share/man
