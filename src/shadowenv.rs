@@ -223,6 +223,9 @@ fn env_append_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, 
 fn env_prepend_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) -> () {
     let curr = env.get(&a).cloned().unwrap_or("".to_string());
     let mut items = curr.split(":").collect::<Vec<&str>>();
+    if items.len() == 1 && items[0] == "" {
+        items = vec![];
+    }
     items.insert(0, &b);
     let next = items.join(":");
     env.insert(a, next.to_string());
