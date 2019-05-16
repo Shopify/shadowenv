@@ -185,13 +185,20 @@ fn env_get(env: Ref<HashMap<String, String>>, a: String) -> Option<String> {
 }
 
 fn env_remove_from_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) -> () {
-    let curr = env.get(&a).cloned().unwrap_or("".to_string());
-    let mut items = curr.split(":").collect::<Vec<&str>>();
+    let curr = env.get(&a);
+    let mut items = match curr {
+        Some(existing) => existing.split(":").collect::<Vec<&str>>(),
+        None => vec![],
+    };
 
     if let Some(index) = items.iter().position(|x| *x == b) {
         items.remove(index);
-        let next = items.join(":");
-        env.insert(a, next.to_string());
+        if items.len() == 0 {
+            env.remove(&a);
+        } else {
+            let next = items.join(":");
+            env.insert(a, next.to_string());
+        }
     }
     ()
 }
@@ -201,13 +208,20 @@ fn env_remove_from_pathlist_containing(
     a: String,
     b: String,
 ) -> () {
-    let curr = env.get(&a).cloned().unwrap_or("".to_string());
-    let items = curr.split(":").collect::<Vec<&str>>();
+    let curr = env.get(&a);
+    let items = match curr {
+        Some(existing) => existing.split(":").collect::<Vec<&str>>(),
+        None => vec![],
+    };
 
     let items = items.into_iter().skip_while(|x| (*x).contains(&b));
     let items: Vec<&str> = items.collect();
-    let next = items.join(":");
-    env.insert(a, next.to_string());
+    if items.len() == 0 {
+        env.remove(&a);
+    } else {
+        let next = items.join(":");
+        env.insert(a, next.to_string());
+    }
     ()
 }
 
