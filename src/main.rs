@@ -1,5 +1,3 @@
-#![feature(try_from)]
-
 extern crate ketos;
 #[macro_use]
 extern crate ketos_derive;
