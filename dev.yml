@@ -1,7 +1,7 @@
 name: shadowenv
 
 up:
-  - rust: nightly-2018-12-26
+  - rust
 
 commands:
   build:     cargo build
