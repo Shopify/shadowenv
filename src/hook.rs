@@ -6,6 +6,7 @@ use crate::output;
 use crate::shadowenv::Shadowenv;
 use crate::undo;
 
+use std::borrow::Cow;
 use std::env;
 use std::rc::Rc;
 use std::result::Result;
@@ -13,6 +14,7 @@ use std::str::FromStr;
 
 use failure::Error;
 use serde_json;
+use shell_escape as shell;
 
 pub enum VariableOutputMode {
     FishMode,
@@ -120,5 +122,5 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 }
 
 fn shell_escape(s: &str) -> String {
-    format!("'{}'", &s.replace("'", "'\"'\"'"))
+    shell::escape(Cow::from(s)).to_string()
 }
