@@ -6,6 +6,7 @@ use crate::output;
 use crate::shadowenv::Shadowenv;
 use crate::undo;
 
+use std::borrow::Cow;
 use std::env;
 use std::rc::Rc;
 use std::result::Result;
@@ -13,6 +14,7 @@ use std::str::FromStr;
 
 use failure::Error;
 use serde_json;
+use shell_escape as shell;
 
 pub enum VariableOutputMode {
     FishMode,
@@ -72,25 +74,24 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 
     match mode {
         VariableOutputMode::PosixMode => {
-            println!("__shadowenv_data={:?}", shadowenv_data);
+            println!("__shadowenv_data={}", shell_escape(&shadowenv_data));
             for (k, v) in shadowenv.exports() {
                 match v {
-                    Some(s) => println!("export {}={:?}", k, s),
+                    Some(s) => println!("export {}={}", k, shell_escape(&s)),
                     None => println!("unset {}", k),
                 }
             }
         }
         VariableOutputMode::FishMode => {
-            println!("set -g __shadowenv_data {:?}", shadowenv_data);
+            println!("set -g __shadowenv_data {}", shell_escape(&shadowenv_data));
             for (k, v) in shadowenv.exports() {
                 match v {
                     Some(s) => {
                         if k == "PATH" {
-                            let pathlist = format!("{:?}", s);
-                            let pathlist = pathlist.replace(":", "\" \"");
+                            let pathlist = shell_escape(&s).replace(":", "' '");
                             println!("set -gx {} {}", k, pathlist);
                         } else {
-                            println!("set -gx {} {:?}", k, s);
+                            println!("set -gx {} {}", k, shell_escape(&s));
                         }
                     }
                     None => {
@@ -118,4 +119,8 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 
     output::print_activation(activation, shadowenv.features());
     Ok(())
+}
+
+fn shell_escape(s: &str) -> String {
+    shell::escape(Cow::from(s)).to_string()
 }
