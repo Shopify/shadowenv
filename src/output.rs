@@ -9,6 +9,7 @@ use std::env;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
+use atty::{isnt, Stream};
 
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
@@ -37,6 +38,9 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
 }
 
 pub fn print_activation(activated: bool, features: HashSet<Feature>) {
+    if isnt(Stream::Stderr) {
+        return
+    }
     if activated {
         if features.len() == 0 {
             eprint!("\x1b[1;34mactivated {}", SHADOWENV);
