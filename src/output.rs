@@ -37,7 +37,7 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     return 1;
 }
 
-pub fn print_activation(activated: bool, features: HashSet<Feature>) {
+pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
     if isnt(Stream::Stderr) {
         return
     }
