@@ -13,6 +13,7 @@ extern crate libc;
 extern crate regex;
 extern crate signatory;
 extern crate signatory_dalek;
+extern crate atty;
 
 mod features;
 mod hash;
