@@ -6,6 +6,7 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate failure;
+extern crate atty;
 extern crate clap;
 extern crate dirs;
 extern crate hex;
@@ -13,13 +14,13 @@ extern crate libc;
 extern crate regex;
 extern crate signatory;
 extern crate signatory_dalek;
-extern crate atty;
 
+mod diff;
+mod exec;
 mod features;
 mod hash;
 mod hook;
 mod init;
-mod diff;
 mod lang;
 mod loader;
 mod output;
@@ -27,7 +28,7 @@ mod shadowenv;
 mod trust;
 mod undo;
 
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
 use std::process;
 
 use crate::hook::VariableOutputMode;
@@ -70,27 +71,57 @@ fn main() {
                     Arg::with_name("porcelain")
                         .long("porcelain")
                         .help("Format variable assignments for machine parsing"),
-                ),
+                )
+                .group(ArgGroup::with_name("format").args(&["porcelain", "fish"])),
         )
         .subcommand(
             SubCommand::with_name("diff")
                 .about("Display a diff of changed environment variables")
                 .arg(
                     Arg::with_name("verbose")
-                    .long("verbose")
-                    .short("v")
-                    .help("Show all environment variables, not just those that changed"),
-                ).arg(
+                        .long("verbose")
+                        .short("v")
+                        .help("Show all environment variables, not just those that changed"),
+                )
+                .arg(
                     Arg::with_name("no-color")
-                    .long("no-color")
-                    .short("n")
-                    .help("Do not use color to highlight the diff"),
+                        .long("no-color")
+                        .short("n")
+                        .help("Do not use color to highlight the diff"),
                 )
                 .arg(Arg::with_name("$__shadowenv_data").required(true)),
         )
         .subcommand(
             SubCommand::with_name("trust")
                 .about("Mark this directory as 'trusted', allowing shadowenv programs to be run"),
+        )
+        .subcommand(
+            SubCommand::with_name("exec")
+                .about(
+                    "Execute a command after loading the environment from the current directory.",
+                )
+                .arg(
+                    Arg::with_name("$__shadowenv_data")
+                        .long("shadowenv-data")
+                        .short("d")
+                        .takes_value(true)
+                        .help("If there's already a shadowenv loaded that you might want to undo first, it can be passed in here"),
+                )
+                .arg(
+                    Arg::with_name("child-argv0")
+                        .help("If the command doesn't need arguments, it can be passed directly as the last arugment."),
+                )
+                .arg(
+                    Arg::with_name("child-argv")
+                        .multiple(true)
+                        .last(true)
+                        .help("If the command requires arguments, they must all be passed after a '--'."),
+                )
+                .group(
+                    ArgGroup::with_name("argv")
+                             .args(&["child-argv0", "child-argv"])
+                             .required(true),
+                )
         )
         .subcommand(
             SubCommand::with_name("init")
@@ -107,7 +138,12 @@ fn main() {
                 .subcommand(
                     SubCommand::with_name("fish")
                         .about("Prints a script which can be eval'd by fish to set up shadowenv."),
-                ),
+                )
+                .group(
+                    ArgGroup::with_name("shell")
+                             .args(&["bash", "fish", "zsh"])
+                             .required(true),
+                )
         )
         .get_matches();
 
@@ -140,6 +176,18 @@ fn main() {
         ("trust", Some(_)) => {
             if let Err(err) = trust::run() {
                 eprintln!("{}", err); // TODO: better formatting
+                process::exit(1);
+            }
+        }
+        ("exec", Some(matches)) => {
+            let data = matches.value_of("$__shadowenv_data");
+            let argv: Vec<&str> = match (matches.value_of("child-argv0"), matches.values_of("child-argv")) {
+                (_, Some(argv))  => argv.collect(),
+                (Some(argv0), _) => vec![argv0],
+                (_, _)           => unreachable!(),
+            };
+            if let Err(err) = exec::run(data, argv) {
+                eprintln!("{}", err);
                 process::exit(1);
             }
         }
