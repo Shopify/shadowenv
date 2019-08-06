@@ -139,12 +139,7 @@ fn main() {
                 .subcommand(
                     SubCommand::with_name("fish")
                         .about("Prints a script which can be eval'd by fish to set up shadowenv."),
-                )
-                .group(
-                    ArgGroup::with_name("shell")
-                             .args(&["bash", "fish", "zsh"])
-                             .required(true),
-                )
+                ),
         )
         .get_matches();
 
