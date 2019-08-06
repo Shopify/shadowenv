@@ -1,8 +1,11 @@
+use failure::Error;
+
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
 
 use crate::features::Feature;
 use crate::undo;
+use serde_json;
 
 #[derive(Debug, ForeignValue, FromValueRef)]
 pub struct Shadowenv {
@@ -16,10 +19,12 @@ pub struct Shadowenv {
     lists: RefCell<HashSet<String>>,
     /// list of features provided by all plugins
     features: RefCell<HashSet<Feature>>,
+    /// checksum of input sources
+    target_hash: u64,
 }
 
 impl Shadowenv {
-    pub fn new(env: HashMap<String, String>, shadowenv_data: undo::Data) -> Shadowenv {
+    pub fn new(env: HashMap<String, String>, shadowenv_data: undo::Data, target_hash: u64) -> Shadowenv {
         let unshadowed_env = Shadowenv::unshadow(&env, shadowenv_data);
 
         Shadowenv {
@@ -28,6 +33,7 @@ impl Shadowenv {
             initial_env: env.clone(),
             lists: RefCell::new(HashSet::new()),
             features: RefCell::new(HashSet::new()),
+            target_hash: target_hash,
         }
     }
 
@@ -88,6 +94,11 @@ impl Shadowenv {
         }
 
         data
+    }
+
+    pub fn format_shadowenv_data(&self) -> Result<String, Error> {
+        let d = self.shadowenv_data();
+        Ok(format!("{:016x}:", self.target_hash).to_string() + &serde_json::to_string(&d)?)
     }
 
     pub fn exports(&self) -> HashMap<String, Option<String>> {

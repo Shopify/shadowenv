@@ -13,7 +13,6 @@ use std::result::Result;
 use std::str::FromStr;
 
 use failure::Error;
-use serde_json;
 use shell_escape as shell;
 
 pub enum VariableOutputMode {
@@ -23,6 +22,17 @@ pub enum VariableOutputMode {
 }
 
 pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
+    match load_env(shadowenv_data)? {
+        Some((shadowenv, activation)) => {
+            apply_env(&shadowenv, mode)?;
+            output::print_activation_to_tty(activation, shadowenv.features());
+            Ok(())
+        },
+        None => Ok(()),
+    }
+}
+
+pub fn load_env(shadowenv_data: &str) -> Result<Option<(Shadowenv, bool)>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -39,21 +49,21 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
 
     match (&active, &target) {
         (None, None) => {
-            return Ok(());
+            return Ok(None);
         }
         (Some(a), Some(t)) if a.hash == t.hash()? => {
-            return Ok(());
+            return Ok(None);
         }
         (_, _) => (),
     }
-
-    let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data));
 
     let target_hash = match &target {
         Some(t) => t.hash().unwrap_or(0),
         None => 0,
     };
+
+    let data = undo::Data::from_str(json_data)?;
+    let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data, target_hash));
 
     let activation = match target {
         Some(target) => {
@@ -68,9 +78,24 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
     };
 
     let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
-    let final_data = shadowenv.shadowenv_data();
-    let shadowenv_data =
-        format!("{:016x}:", target_hash).to_string() + &serde_json::to_string(&final_data)?;
+    Ok(Some((shadowenv, activation)))
+}
+
+pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
+    let shadowenv_data = shadowenv.format_shadowenv_data()?;
+
+    for (k, v) in shadowenv.exports() {
+        match v {
+            Some(s) => env::set_var(k, &s),
+            None    => env::set_var(k, ""),
+        }
+    }
+
+    Ok(shadowenv_data)
+}
+
+pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
+    let shadowenv_data = shadowenv.format_shadowenv_data()?;
 
     match mode {
         VariableOutputMode::PosixMode => {
@@ -116,8 +141,6 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             }
         }
     }
-
-    output::print_activation_to_tty(activation, shadowenv.features());
     Ok(())
 }
 

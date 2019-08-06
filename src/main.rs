@@ -14,9 +14,10 @@ extern crate libc;
 extern crate regex;
 extern crate signatory;
 extern crate signatory_dalek;
+extern crate exec;
 
 mod diff;
-mod exec;
+mod execcmd;
 mod features;
 mod hash;
 mod hook;
@@ -186,7 +187,7 @@ fn main() {
                 (Some(argv0), _) => vec![argv0],
                 (_, _)           => unreachable!(),
             };
-            if let Err(err) = exec::run(data, argv) {
+            if let Err(err) = execcmd::run(data, argv) {
                 eprintln!("{}", err);
                 process::exit(1);
             }
