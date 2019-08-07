@@ -116,3 +116,20 @@ creating the Shadowenv: most likely no value.
 
 Those are the basics! There's a bit [more you can do with Shadowlisp](/shadowlisp), and we have some
 [suggestions](/best-practices) for how to actually use Shadowenv in an organization.
+
+# Usage in Scripts
+
+Sometimes you may want a Shadowenv loaded in a non-interactive script. This is what `shadowenv exec`
+is for. When you run `shadowenv exec`, Shadowenv will load the Shadowlisp from the current directory
+and execute the specified program. For example, imagine a directory with a Shadowenv that puts
+`nginx` on the `PATH`:
+
+```bash
+#!/bin/sh
+cd /path/to/thing/with/dot-shadowenv
+
+shadowenv exec -- nginx -g 'daemon off;'
+```
+
+In this case, we didn't need to load the Shadowenv shell hook, as `shadowenv exec` loaded the
+environment before executing nginx.
