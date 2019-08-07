@@ -87,7 +87,7 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
     for (k, v) in shadowenv.exports() {
         match v {
             Some(s) => env::set_var(k, &s),
-            None    => env::set_var(k, ""),
+            None    => env::remove_var(k),
         }
     }
 
