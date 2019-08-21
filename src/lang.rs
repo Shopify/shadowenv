@@ -180,31 +180,31 @@ impl ShadowLang {
                 })
             });
 
-        interp
-            .scope()
-            .add_value_with_name("provide", |name| {
-                Value::new_foreign_fn(name, move |ctx, args| {
-                    let value = ctx
-                        .scope()
-                        .get_constant(shadowenv_name)
-                        .expect("bug: shadowenv not defined");
-                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+        interp.scope().add_value_with_name("provide", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                let value = ctx
+                    .scope()
+                    .get_constant(shadowenv_name)
+                    .expect("bug: shadowenv not defined");
+                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
 
-                    let version = match args.len() {
-                        1 => None,
-                        2 => Some(<&str as FromValueRef>::from_value_ref(&args[1])?),
-                        _ => return Err(From::from(ketos::exec::ExecError::ArityError {
+                let version = match args.len() {
+                    1 => None,
+                    2 => Some(<&str as FromValueRef>::from_value_ref(&args[1])?),
+                    _ => {
+                        return Err(From::from(ketos::exec::ExecError::ArityError {
                             name: Some(name),
                             expected: ketos::function::Arity::Range(1, 2),
                             found: args.len() as u32,
-                        })),
-                    };
-                    let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                        }))
+                    }
+                };
+                let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                    shadowenv.add_feature(feature, version);
-                    Ok(Value::Unit)
-                })
-            });
+                shadowenv.add_feature(feature, version);
+                Ok(Value::Unit)
+            })
+        });
 
         // TODO(burke): expand-path isn't even implemented
         let prelude = r#"

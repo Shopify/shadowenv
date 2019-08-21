@@ -2,6 +2,7 @@ use crate::features::Feature;
 use crate::loader;
 use crate::trust;
 
+use atty::{isnt, Stream};
 use failure::Error;
 use regex::Regex;
 use std::collections::HashSet;
@@ -9,7 +10,6 @@ use std::env;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use atty::{isnt, Stream};
 
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
@@ -39,7 +39,7 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
 
 pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
     if isnt(Stream::Stderr) {
-        return
+        return;
     }
     if activated {
         if features.len() == 0 {
@@ -50,7 +50,10 @@ pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
                 .map(|s| format!("{}", s))
                 .collect::<Vec<String>>()
                 .join(", ");
-            eprint!("\x1b[1;34mactivated {} \x1b[1;34m({})", SHADOWENV, feature_list);
+            eprint!(
+                "\x1b[1;34mactivated {} \x1b[1;34m({})",
+                SHADOWENV, feature_list
+            );
         }
     } else {
         eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);

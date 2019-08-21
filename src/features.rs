@@ -8,7 +8,10 @@ pub struct Feature {
 
 impl Feature {
     pub fn new(name: String, version: Option<String>) -> Self {
-        Feature { name: name, version: version }
+        Feature {
+            name: name,
+            version: version,
+        }
     }
 
     pub fn name(&self) -> &String {
@@ -23,7 +26,7 @@ impl Feature {
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.version {
-            Some(v) => write!(f, "{name}:{version}", name=self.name, version=v),
+            Some(v) => write!(f, "{name}:{version}", name = self.name, version = v),
             None => write!(f, "{}", self.name),
         }
     }
