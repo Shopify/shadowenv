@@ -24,8 +24,7 @@ pub enum VariableOutputMode {
 pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
     match load_env(shadowenv_data)? {
         Some((shadowenv, activation)) => {
-            apply_env(&shadowenv, mode)?;
-            output::print_activation_to_tty(activation, shadowenv.features());
+            apply_env(&shadowenv, mode, activation)?;
             Ok(())
         }
         None => Ok(()),
@@ -94,7 +93,11 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
     Ok(shadowenv_data)
 }
 
-pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
+pub fn apply_env(
+    shadowenv: &Shadowenv,
+    mode: VariableOutputMode,
+    activation: bool,
+) -> Result<(), Error> {
     let shadowenv_data = shadowenv.format_shadowenv_data()?;
 
     match mode {
@@ -106,6 +109,7 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                     None => println!("unset {}", k),
                 }
             }
+            output::print_activation_to_tty(activation, shadowenv.features());
         }
         VariableOutputMode::FishMode => {
             println!("set -g __shadowenv_data {}", shell_escape(&shadowenv_data));
@@ -124,6 +128,7 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                     }
                 }
             }
+            output::print_activation_to_tty(activation, shadowenv.features());
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>
