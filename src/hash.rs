@@ -81,11 +81,22 @@ impl ToString for Hash {
     }
 }
 
-#[test]
-fn test_key_encoding() {
-    let key = Hash { hash: 2 };
-    let hex = key.to_string();
-    assert_eq!("0000000000000002", hex);
-    let key2: Hash = Hash::from_str(&hex).unwrap();
-    assert_eq!(key, key2);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_key_encoding() {
+        let key = Hash { hash: 2 };
+        let hex = key.to_string();
+        assert_eq!("0000000000000002", hex);
+        let key2: Hash = Hash::from_str(&hex).unwrap();
+        assert_eq!(key, key2);
+    }
+
+    #[quickcheck]
+    fn hash_roundtrip(key: u64) -> bool {
+        let hash = Hash { hash: key };
+        key == Hash::from_str(&hash.to_string()).unwrap().hash
+    }
 }

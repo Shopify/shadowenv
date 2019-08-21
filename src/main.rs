@@ -19,6 +19,12 @@ extern crate signatory_dalek;
 #[macro_use]
 extern crate maplit;
 
+#[cfg(test)]
+extern crate quickcheck;
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 mod diff;
 mod execcmd;
 mod features;
