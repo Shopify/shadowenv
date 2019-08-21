@@ -3,10 +3,12 @@ use crate::lang;
 use crate::lang::ShadowLang;
 use crate::loader;
 use crate::output;
+use crate::serde_json;
 use crate::shadowenv::Shadowenv;
 use crate::undo;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::env;
 use std::rc::Rc;
 use std::result::Result;
@@ -19,6 +21,23 @@ pub enum VariableOutputMode {
     FishMode,
     PorcelainMode,
     PosixMode,
+    JsonMode,
+    PrettyJsonMode,
+}
+
+#[derive(Serialize, Debug)]
+struct Modifications {
+    exported: HashMap<String, Option<String>>,
+    unexported: HashMap<String, Option<String>>,
+}
+
+impl Modifications {
+    fn new(shadowenv_data: String, exports: HashMap<String, Option<String>>) -> Modifications {
+        return Modifications {
+            unexported: hashmap! {"__shadowenv_data".to_string() => Some(shadowenv_data)},
+            exported: exports,
+        };
+    }
 }
 
 pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
@@ -144,6 +163,14 @@ pub fn apply_env(
                     None => print!("\x03\x1F{}\x1F\x1E", k),
                 }
             }
+        }
+        VariableOutputMode::JsonMode => {
+            let modifs = Modifications::new(shadowenv_data, shadowenv.exports());
+            println!("{}", serde_json::to_string(&modifs).unwrap());
+        }
+        VariableOutputMode::PrettyJsonMode => {
+            let modifs = Modifications::new(shadowenv_data, shadowenv.exports());
+            println!("{}", serde_json::to_string_pretty(&modifs).unwrap());
         }
     }
     Ok(())
