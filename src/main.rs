@@ -58,6 +58,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("hook")
                 .about("Runs the shell hook. You shouldn't need to run this manually.")
+                .setting(AppSettings::DisableHelpSubcommand)
                 .arg(Arg::with_name("$__shadowenv_data").required(true))
                 .arg(
                     Arg::with_name("fish")
@@ -101,7 +102,8 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("diff")
-                .about("Display a diff of changed environment variables")
+                .about("Display a diff of changed environment variables.")
+                .setting(AppSettings::DisableHelpSubcommand)
                 .arg(
                     Arg::with_name("verbose")
                         .long("verbose")
@@ -118,13 +120,15 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("trust")
-                .about("Mark this directory as 'trusted', allowing shadowenv programs to be run"),
+                .about("Mark this directory as 'trusted', allowing shadowenv programs to be run.")
+                .setting(AppSettings::DisableHelpSubcommand)
         )
         .subcommand(
             SubCommand::with_name("exec")
                 .about(
                     "Execute a command after loading the environment from the current directory.",
                 )
+                .setting(AppSettings::DisableHelpSubcommand)
                 .arg(
                     Arg::with_name("$__shadowenv_data")
                         .long("shadowenv-data")
@@ -150,8 +154,9 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("init")
-                .about("Prints a script which can be eval'd to set up shadowenv in various shells")
+                .about("Prints a script which can be eval'd to set up shadowenv in various shells.")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
+                .setting(AppSettings::DisableHelpSubcommand)
                 .subcommand(
                     SubCommand::with_name("bash")
                         .about("Prints a script which can be eval'd by bash to set up shadowenv."),
@@ -163,7 +168,7 @@ fn main() {
                 .subcommand(
                     SubCommand::with_name("fish")
                         .about("Prints a script which can be eval'd by fish to set up shadowenv."),
-                ),
+                )
         )
         .get_matches();
 
