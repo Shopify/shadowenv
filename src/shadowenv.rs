@@ -24,7 +24,11 @@ pub struct Shadowenv {
 }
 
 impl Shadowenv {
-    pub fn new(env: HashMap<String, String>, shadowenv_data: undo::Data, target_hash: u64) -> Shadowenv {
+    pub fn new(
+        env: HashMap<String, String>,
+        shadowenv_data: undo::Data,
+        target_hash: u64,
+    ) -> Shadowenv {
         let unshadowed_env = Shadowenv::unshadow(&env, shadowenv_data);
 
         Shadowenv {

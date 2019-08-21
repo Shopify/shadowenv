@@ -9,12 +9,12 @@ extern crate failure;
 extern crate atty;
 extern crate clap;
 extern crate dirs;
+extern crate exec;
 extern crate hex;
 extern crate libc;
 extern crate regex;
 extern crate signatory;
 extern crate signatory_dalek;
-extern crate exec;
 
 mod diff;
 mod execcmd;
@@ -177,10 +177,13 @@ fn main() {
         }
         ("exec", Some(matches)) => {
             let data = matches.value_of("$__shadowenv_data");
-            let argv: Vec<&str> = match (matches.value_of("child-argv0"), matches.values_of("child-argv")) {
-                (_, Some(argv))  => argv.collect(),
+            let argv: Vec<&str> = match (
+                matches.value_of("child-argv0"),
+                matches.values_of("child-argv"),
+            ) {
+                (_, Some(argv)) => argv.collect(),
                 (Some(argv0), _) => vec![argv0],
-                (_, _)           => unreachable!(),
+                (_, _) => unreachable!(),
             };
             if let Err(err) = execcmd::run(data, argv) {
                 eprintln!("{}", err);

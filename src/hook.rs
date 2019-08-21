@@ -27,7 +27,7 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
             apply_env(&shadowenv, mode)?;
             output::print_activation_to_tty(activation, shadowenv.features());
             Ok(())
-        },
+        }
         None => Ok(()),
     }
 }
@@ -87,7 +87,7 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
     for (k, v) in shadowenv.exports() {
         match v {
             Some(s) => env::set_var(k, &s),
-            None    => env::remove_var(k),
+            None => env::remove_var(k),
         }
     }
 
