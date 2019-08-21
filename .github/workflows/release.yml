@@ -1,0 +1,22 @@
+name: Release
+
+on: [release]
+
+jobs:
+  release:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macOS-10.14, ubuntu-18.04]
+
+    steps:
+    - uses: hecrj/setup-rust-action@v1.0.2
+    - uses: actions/checkout@v1
+    - name: Build
+      run: cargo build --release
+    - uses: Shopify/upload-to-release@master
+      with:
+        name: shadowenv-${{ matrix.os }}
+        path: target/release/shadowenv
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
