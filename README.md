@@ -59,6 +59,13 @@ the trust section).
 
 See https://shopify.github.io/shadowenv/ for Shadowlisp documentation.
 
+## Integrations
+
+Shadowenv has plugins for multiple editors and/or IDEs:
+
+* [shadowenv.vim](https://github.com/Shopify/shadowenv.vim)
+* [shadowenv.el](https://github.com/Shopify/shadowenv.el)
+
 ## Trust
 
 If you `cd` into a directory containing `.shadowenv.d/*.lisp` files, they will not be run and you
