@@ -67,6 +67,7 @@ Shadowenv has plugins for multiple editors and/or IDEs:
 * [shadowenv.el](https://github.com/Shopify/shadowenv.el)
 * [vscode-shadowenv](https://github.com/Shopify/vscode-shadowenv)
 * [atom-shadowenv](https://github.com/Shopify/atom-shadowenv)
+* [sublime-shadowenv](https://github.com/Shopify/sublime-shadowenv)
 
 ## Trust
 
