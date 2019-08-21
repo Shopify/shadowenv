@@ -3,10 +3,12 @@ use crate::lang;
 use crate::lang::ShadowLang;
 use crate::loader;
 use crate::output;
+use crate::serde_json;
 use crate::shadowenv::Shadowenv;
 use crate::undo;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::env;
 use std::rc::Rc;
 use std::result::Result;
@@ -19,13 +21,29 @@ pub enum VariableOutputMode {
     FishMode,
     PorcelainMode,
     PosixMode,
+    JsonMode,
+    PrettyJsonMode,
+}
+
+#[derive(Serialize, Debug)]
+struct Modifications {
+    exported: HashMap<String, Option<String>>,
+    unexported: HashMap<String, Option<String>>,
+}
+
+impl Modifications {
+    fn new(shadowenv_data: String, exports: HashMap<String, Option<String>>) -> Modifications {
+        return Modifications {
+            unexported: hashmap! {"__shadowenv_data".to_string() => Some(shadowenv_data)},
+            exported: exports,
+        };
+    }
 }
 
 pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
     match load_env(shadowenv_data)? {
         Some((shadowenv, activation)) => {
-            apply_env(&shadowenv, mode)?;
-            output::print_activation_to_tty(activation, shadowenv.features());
+            apply_env(&shadowenv, mode, activation)?;
             Ok(())
         }
         None => Ok(()),
@@ -94,7 +112,11 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
     Ok(shadowenv_data)
 }
 
-pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
+pub fn apply_env(
+    shadowenv: &Shadowenv,
+    mode: VariableOutputMode,
+    activation: bool,
+) -> Result<(), Error> {
     let shadowenv_data = shadowenv.format_shadowenv_data()?;
 
     match mode {
@@ -106,6 +128,7 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                     None => println!("unset {}", k),
                 }
             }
+            output::print_activation_to_tty(activation, shadowenv.features());
         }
         VariableOutputMode::FishMode => {
             println!("set -g __shadowenv_data {}", shell_escape(&shadowenv_data));
@@ -124,6 +147,7 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                     }
                 }
             }
+            output::print_activation_to_tty(activation, shadowenv.features());
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>
@@ -139,6 +163,14 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                     None => print!("\x03\x1F{}\x1F\x1E", k),
                 }
             }
+        }
+        VariableOutputMode::JsonMode => {
+            let modifs = Modifications::new(shadowenv_data, shadowenv.exports());
+            println!("{}", serde_json::to_string(&modifs).unwrap());
+        }
+        VariableOutputMode::PrettyJsonMode => {
+            let modifs = Modifications::new(shadowenv_data, shadowenv.exports());
+            println!("{}", serde_json::to_string_pretty(&modifs).unwrap());
         }
     }
     Ok(())

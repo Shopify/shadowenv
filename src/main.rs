@@ -13,8 +13,11 @@ extern crate exec;
 extern crate hex;
 extern crate libc;
 extern crate regex;
+extern crate serde_json;
 extern crate signatory;
 extern crate signatory_dalek;
+#[macro_use]
+extern crate maplit;
 
 mod diff;
 mod execcmd;
@@ -56,6 +59,11 @@ fn main() {
                         .help("Format variable assignments for fish shell"),
                 )
                 .arg(
+                    Arg::with_name("posix")
+                        .long("posix")
+                        .help("Format variable assignments for posix shells (default)"),
+                )
+                .arg(
                     Arg::with_name("silent")
                         .long("silent")
                         .help("Suppress error printing"),
@@ -73,7 +81,17 @@ fn main() {
                         .long("porcelain")
                         .help("Format variable assignments for machine parsing"),
                 )
-                .group(ArgGroup::with_name("format").args(&["porcelain", "fish"])),
+                .arg(
+                    Arg::with_name("json")
+                        .long("json")
+                        .help("Format variable assignments as JSON"),
+                )
+                .arg(
+                    Arg::with_name("pretty-json")
+                        .long("pretty-json")
+                        .help("Format variable assignments as pretty JSON"),
+                )
+                .group(ArgGroup::with_name("format").args(&["porcelain", "posix", "fish", "json", "pretty-json"])),
         )
         .subcommand(
             SubCommand::with_name("diff")
@@ -148,12 +166,12 @@ fn main() {
             let data = matches.value_of("$__shadowenv_data").unwrap();
             let shellpid = determine_shellpid_or_crash(matches.value_of("shellpid"));
 
-            let mode = match matches.is_present("porcelain") {
-                true => VariableOutputMode::PorcelainMode,
-                false => match matches.is_present("fish") {
-                    true => VariableOutputMode::FishMode,
-                    false => VariableOutputMode::PosixMode,
-                },
+            let mode = match true {
+                true if matches.is_present("porcelain") => VariableOutputMode::PorcelainMode,
+                true if matches.is_present("fish") => VariableOutputMode::FishMode,
+                true if matches.is_present("json") => VariableOutputMode::JsonMode,
+                true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJsonMode,
+                _ => VariableOutputMode::PosixMode,
             };
             if let Err(err) = hook::run(data, mode) {
                 process::exit(output::handle_hook_error(
