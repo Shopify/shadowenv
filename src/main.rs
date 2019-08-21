@@ -59,6 +59,11 @@ fn main() {
                         .help("Format variable assignments for fish shell"),
                 )
                 .arg(
+                    Arg::with_name("posix")
+                        .long("posix")
+                        .help("Format variable assignments for posix shells (default)"),
+                )
+                .arg(
                     Arg::with_name("silent")
                         .long("silent")
                         .help("Suppress error printing"),
@@ -86,7 +91,7 @@ fn main() {
                         .long("pretty-json")
                         .help("Format variable assignments as pretty JSON"),
                 )
-                .group(ArgGroup::with_name("format").args(&["porcelain", "fish", "json", "pretty-json"])),
+                .group(ArgGroup::with_name("format").args(&["porcelain", "posix", "fish", "json", "pretty-json"])),
         )
         .subcommand(
             SubCommand::with_name("diff")
