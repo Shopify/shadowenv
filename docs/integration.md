@@ -73,8 +73,11 @@ def on_some_event
   data = JSON.parse(stdout)
 
   data['unexported'].each do |name, value|
-    raise unless name == '__shadowenv_data'
-    $shadowenv_data = value
+    if name == '__shadowenv_data'
+      $shadowenv_data = value
+    else
+      $stderr.puts('unexpected unexported value')
+    end
   end
 
   data['exported'].each do |name, value|
