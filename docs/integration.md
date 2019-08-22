@@ -24,7 +24,7 @@ Shadowenv shell integration:
 * [VS Code: vscode-shadowenv](https://github.com/Shopify/vscode-shadowenv)
 * [Atom: atom-shadowenv](https://github.com/Shopify/atom-shadowenv)
 * [Sublime Text 3: sublime-shadowenv](https://github.com/Shopify/sublime-shadowenv)
-* IntelliJ Family: *(coming soon)*
+* [IntelliJ Family: intellij-shadowenv](https://github.com/Shopify/intellij-shadowenv)
 
 ### Building Integrations
 
