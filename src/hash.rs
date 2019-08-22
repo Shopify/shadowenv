@@ -98,7 +98,9 @@ mod tests {
 
     impl Arbitrary for Hash {
         fn arbitrary<G: Gen>(g: &mut G) -> Hash {
-            Hash { hash: Arbitrary::arbitrary(g) }
+            Hash {
+                hash: Arbitrary::arbitrary(g),
+            }
         }
     }
 
