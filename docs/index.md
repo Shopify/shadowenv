@@ -22,12 +22,6 @@ buttons:
     url: /getting-started
     external_url: false
 
-# author:
-#   title: About Author
-#   title_url: '#'
-#   external_url: true
-#   description: Author description
-
 grid_navigation:
   - title: Getting Started
     excerpt: Installation and first steps
@@ -45,4 +39,8 @@ grid_navigation:
     excerpt: Shadowenv's system for preventing malicious usage
     cta: Read more
     url: /trust
+  - title: Integration
+    excerpt: Integrations for various editors, etc., and how to write your own
+    cta: Read more
+    url: /integration
 ---

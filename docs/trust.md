@@ -10,6 +10,10 @@ page_nav:
   prev:
     content: Best Practices
     url: /best-practices
+  next:
+    content: Integration
+    url: /integration
+
 
 ---
 

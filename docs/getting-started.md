@@ -117,6 +117,14 @@ creating the Shadowenv: most likely no value.
 Those are the basics! There's a bit [more you can do with Shadowlisp](/shadowlisp), and we have some
 [suggestions](/best-practices) for how to actually use Shadowenv in an organization.
 
+### Add to your editor or IDE
+
+Depending on you use your editor, you may find it helpful to have the same environment variable
+settings as in your shell. We have plugins for most common editors, and writing new plugins is
+relatively straightforward.
+
+Check out the [Integration](/integration) page for more information and a list of available plugins.
+
 # Usage in Scripts
 
 Sometimes you may want a Shadowenv loaded in a non-interactive script. This is what `shadowenv exec`
