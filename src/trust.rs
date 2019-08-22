@@ -47,8 +47,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
         Some(bytes) => {
             let sig = Ed25519Signature::new(from_vec(bytes));
             let verifier = Ed25519Verifier::from(&pubkey);
-            ed25519::verify(&verifier, msg, &sig)?;
-            Ok(true)
+            Ok(ed25519::verify(&verifier, msg, &sig).is_ok())
         }
     }
 }

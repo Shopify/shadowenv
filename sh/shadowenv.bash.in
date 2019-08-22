@@ -4,7 +4,7 @@ shadowenv() {
 
 __shadowenv_hook() {
   local flags; flags=(--shellpid "$$")
-  if [[ "$1" == "bash-debug" ]]; then
+  if [[ "$1" == "preexec" ]]; then
     flags+=(--silent)
   fi
   # We can't do the nice `x | source /dev/stdin` trick in old versions of bash,

@@ -8,3 +8,4 @@ commands:
   test:      cargo test
   run-built: target/debug/shadowenv
   add-man:   cp -r man/* /usr/local/share/man
+  style:     cargo fmt --all -- --check

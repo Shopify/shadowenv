@@ -22,7 +22,7 @@ pub struct Source {
     pub files: Vec<SourceFile>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Hash {
     pub hash: u64,
 }
@@ -81,11 +81,31 @@ impl ToString for Hash {
     }
 }
 
-#[test]
-fn test_key_encoding() {
-    let key = Hash { hash: 2 };
-    let hex = key.to_string();
-    assert_eq!("0000000000000002", hex);
-    let key2: Hash = Hash::from_str(&hex).unwrap();
-    assert_eq!(key, key2);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::Arbitrary;
+    use quickcheck::Gen;
+
+    #[test]
+    fn test_key_encoding() {
+        let key = Hash { hash: 2 };
+        let hex = key.to_string();
+        assert_eq!("0000000000000002", hex);
+        let key2: Hash = Hash::from_str(&hex).unwrap();
+        assert_eq!(key, key2);
+    }
+
+    impl Arbitrary for Hash {
+        fn arbitrary<G: Gen>(g: &mut G) -> Hash {
+            Hash {
+                hash: Arbitrary::arbitrary(g),
+            }
+        }
+    }
+
+    #[quickcheck]
+    fn hash_roundtrip(hash: Hash) -> bool {
+        hash.hash == Hash::from_str(&hash.to_string()).unwrap().hash
+    }
 }
