@@ -16,6 +16,8 @@ doks:
         item_url: /best-practices
       - item_name: Trust
         item_url: /trust
+      - item_name: Integration
+        item_url: /integration
   footer:
     content:
       logo:
