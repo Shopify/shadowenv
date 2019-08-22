@@ -7,6 +7,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate failure;
 extern crate atty;
+#[macro_use]
 extern crate clap;
 extern crate dirs;
 extern crate exec;
@@ -19,6 +20,7 @@ extern crate signatory_dalek;
 #[macro_use]
 extern crate maplit;
 
+mod assimilate;
 mod diff;
 mod execcmd;
 mod features;
@@ -92,6 +94,28 @@ fn main() {
                         .help("Format variable assignments as pretty JSON"),
                 )
                 .group(ArgGroup::with_name("format").args(&["porcelain", "posix", "fish", "json", "pretty-json"])),
+        )
+        .subcommand(
+            SubCommand::with_name("assimilate")
+                .about("Convert other tools' files into Shadowlisp")
+                .arg(
+                    Arg::with_name("auto")
+                        .help("automatically convert other environment manipulation files from the current directory into Shadowlisp")
+                        .long("auto")
+                )
+                .arg(
+                    Arg::with_name("type")
+                        .help("type of file to convert")
+                        .long("type")
+                        .short("t")
+                        .takes_value(true)
+                        .possible_values(&assimilate::Types::variants())
+                )
+                .group(
+                    ArgGroup::with_name("argv")
+                             .args(&["type", "auto"])
+                             .required(true),
+                )
         )
         .subcommand(
             SubCommand::with_name("diff")
@@ -189,6 +213,20 @@ fn main() {
         }
         ("trust", Some(_)) => {
             if let Err(err) = trust::run() {
+                eprintln!("{}", err); // TODO: better formatting
+                process::exit(1);
+            }
+        }
+        ("assimilate", Some(matches)) => {
+            let typ = if matches.is_present("type") {
+                Some(value_t!(matches.value_of("type"), assimilate::Types).unwrap_or_else(|e| e.exit()))
+            } else if matches.is_present("auto") {
+                None
+            } else {
+                unreachable!("these two are a group, clap won't let us get here");
+            };
+
+            if let Err(err) = assimilate::run(typ) {
                 eprintln!("{}", err); // TODO: better formatting
                 process::exit(1);
             }
