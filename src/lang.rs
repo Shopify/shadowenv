@@ -228,7 +228,7 @@ impl ShadowLang {
 
         for source_file in &source.files {
             let fname = format!("__shadowenv__{}", source_file.name);
-            let prog = format!("(define ({} env) (do {}))", fname, source_file.source);
+            let prog = format!("(define ({} env) (do {}))", fname, source_file.contents);
 
             // TODO: error type?
             if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
