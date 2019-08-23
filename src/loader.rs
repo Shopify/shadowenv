@@ -1,5 +1,4 @@
 use crate::hash::Source;
-use crate::trust;
 
 use std::fs::{self, File};
 use std::io::{prelude::*, ErrorKind};
@@ -25,29 +24,24 @@ pub fn find_root(at: PathBuf, relative_component: &str) -> Result<Option<PathBuf
 
 /// Load a shadowenv program from (generally) .shadowenv.d/*.lisp. The returned Hash's source simply
 /// concatenates all the files in order, but the hashsum is also dependent on the filenames.
-pub fn load(at: PathBuf, relative_component: &str) -> Result<Option<Source>, Error> {
+/// Note that this function assumes that the dirpath is trusted.
+pub fn load(dirpath: PathBuf) -> Result<Option<Source>, Error> {
     let mut source = Source::new();
 
-    if let Some(dirpath) = find_root(at, relative_component)? {
-        if !trust::is_dir_trusted(&dirpath)? {
-            return Err(trust::NotTrusted {}.into());
-        }
-
-        for entry in fs::read_dir(dirpath)? {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    // TODO: there HAS to  be a better way to do this.
-                    let basename = path.file_name().unwrap().to_str().unwrap().to_string();
-                    if !basename.ends_with(".lisp") {
-                        continue;
-                    }
-                    let mut file = File::open(&path)?;
-                    let mut contents = String::new();
-                    file.read_to_string(&mut contents)?;
-                    // TODO: surely  there's a better way to do this.
-                    source.add_file(basename, contents)?;
+    for entry in fs::read_dir(dirpath)? {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.is_file() {
+                // TODO: there HAS to  be a better way to do this.
+                let basename = path.file_name().unwrap().to_str().unwrap().to_string();
+                if !basename.ends_with(".lisp") {
+                    continue;
                 }
+                let mut file = File::open(&path)?;
+                let mut contents = String::new();
+                file.read_to_string(&mut contents)?;
+                // TODO: surely  there's a better way to do this.
+                source.add_file(basename, contents)?;
             }
         }
     }

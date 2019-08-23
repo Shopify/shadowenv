@@ -5,6 +5,7 @@ use crate::loader;
 use crate::output;
 use crate::serde_json;
 use crate::shadowenv::Shadowenv;
+use crate::trust;
 use crate::undo;
 
 use std::borrow::Cow;
@@ -62,8 +63,7 @@ pub fn load_env(shadowenv_data: &str) -> Result<Option<(Shadowenv, bool)>, Error
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    let target: Option<Source> =
-        loader::load(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    let target: Option<Source> = load_trusted_source()?;
 
     match (&active, &target) {
         (None, None) => {
@@ -97,6 +97,18 @@ pub fn load_env(shadowenv_data: &str) -> Result<Option<(Shadowenv, bool)>, Error
 
     let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
     Ok(Some((shadowenv, activation)))
+}
+
+/// Load a Source from the current dir, ensuring that it is trusted.
+fn load_trusted_source() -> Result<Option<Source>, Error> {
+    if let Some(root) = loader::find_root(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?
+    {
+        if !trust::is_dir_trusted(&root)? {
+            return Err(trust::NotTrusted {}.into());
+        }
+        return Ok(loader::load(root)?);
+    }
+    Ok(None)
 }
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
