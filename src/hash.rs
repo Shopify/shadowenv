@@ -131,6 +131,6 @@ mod tests {
         let a = source.hash();
         let b = source.hash();
 
-        (a.is_err() && b.is_err()) ||(a.is_ok() && b.is_ok() && a.unwrap() == b.unwrap())
+        (a.is_err() && b.is_err()) || (a.is_ok() && b.is_ok() && a.unwrap() == b.unwrap())
     }
 }
