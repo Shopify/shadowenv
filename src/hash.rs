@@ -11,15 +11,15 @@ use failure::Error;
 const FILE_SEPARATOR: &'static str = "\x1C";
 const GROUP_SEPARATOR: &'static str = "\x1D";
 
-#[derive(Debug)]
-pub struct SourceFile {
-    pub name: String,
-    pub source: String,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Source {
     pub files: Vec<SourceFile>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceFile {
+    pub name: String,
+    pub contents: String,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -39,20 +39,20 @@ impl Source {
     pub fn add_file(&mut self, name: String, contents: String) -> Result<(), Error> {
         self.files.push(SourceFile {
             name: name.to_string(),
-            source: contents.to_string(),
+            contents: contents.to_string(),
         });
         Ok(())
     }
 
     pub fn hash(&self) -> Result<u64, Error> {
-        let mut hasher = VarBlake2b::new(8)?;
         if self.files.len() == 0 {
             return Ok(0);
         }
+        let mut hasher = VarBlake2b::new(8)?;
         for file in self.files.iter() {
             hasher.input(&file.name);
             hasher.input(GROUP_SEPARATOR);
-            hasher.input(&file.source);
+            hasher.input(&file.contents);
             hasher.input(FILE_SEPARATOR);
         }
         let mut sum: u64 = 0;
@@ -96,6 +96,23 @@ mod tests {
         assert_eq!(key, key2);
     }
 
+    impl Arbitrary for Source {
+        fn arbitrary<G: Gen>(g: &mut G) -> Source {
+            Source {
+                files: Arbitrary::arbitrary(g),
+            }
+        }
+    }
+
+    impl Arbitrary for SourceFile {
+        fn arbitrary<G: Gen>(g: &mut G) -> SourceFile {
+            SourceFile {
+                name: Arbitrary::arbitrary(g),
+                contents: Arbitrary::arbitrary(g),
+            }
+        }
+    }
+
     impl Arbitrary for Hash {
         fn arbitrary<G: Gen>(g: &mut G) -> Hash {
             Hash {
@@ -107,5 +124,13 @@ mod tests {
     #[quickcheck]
     fn hash_roundtrip(hash: Hash) -> bool {
         hash.hash == Hash::from_str(&hash.to_string()).unwrap().hash
+    }
+
+    #[quickcheck]
+    fn source_hash_is_stable(source: Source) -> bool {
+        let a = source.hash();
+        let b = source.hash();
+
+        (a.is_err() && b.is_err()) || (a.is_ok() && b.is_ok() && a.unwrap() == b.unwrap())
     }
 }
