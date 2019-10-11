@@ -11,7 +11,7 @@ jobs:
         os: [macOS-10.14, ubuntu-18.04]
 
     steps:
-    - uses: hecrj/setup-rust-action@v1.0.2
+    - uses: hecrj/setup-rust-action@v1.2.0
     - uses: actions/checkout@v1
     - name: Build
       run: cargo build --release
