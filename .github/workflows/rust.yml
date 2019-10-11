@@ -11,7 +11,7 @@ jobs:
         rust: [stable, beta, nightly]
 
     steps:
-    - uses: hecrj/setup-rust-action@v1.0.2
+    - uses: hecrj/setup-rust-action@v1.2.0
       with:
         rust-version: ${{ matrix.rust }}
         components: rustfmt  # Comma-separated
