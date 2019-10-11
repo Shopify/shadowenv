@@ -14,9 +14,8 @@ jobs:
     - uses: hecrj/setup-rust-action@v1.0.2
       with:
         rust-version: ${{ matrix.rust }}
+        components: rustfmt  # Comma-separated
     - uses: actions/checkout@v1
-    - name: Install rustfmt
-      run: rustup component add rustfmt
     - name: fmt check
       run: cargo fmt --all -- --check
     - name: Build
