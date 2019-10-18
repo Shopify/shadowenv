@@ -2,6 +2,7 @@ use crate::hash::Source;
 use crate::shadowenv::Shadowenv;
 
 use ketos::{Error, FromValueRef, Value};
+use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -206,11 +207,28 @@ impl ShadowLang {
             })
         });
 
-        // TODO(burke): expand-path isn't even implemented
-        let prelude = r#"
-          ;; Path manipulation stuff
-          (define (expand-path path) path)
+        interp.scope().add_value_with_name("expand-path", |name| {
+            Value::new_foreign_fn(name, move |_ctx, args| {
+                assert_args!(args, 1, name);
+                let path = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let expanded = shellexpand::tilde(path);
+                let canonicalized = match fs::canonicalize(expanded.to_string()) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return Err(From::from(ketos::io::IoError {
+                            err: e,
+                            path: PathBuf::from(path),
+                            mode: ketos::io::IoMode::Read,
+                        }))
+                    }
+                };
+                Ok(<String as Into<Value>>::into(
+                    canonicalized.to_string_lossy().to_string(),
+                ))
+            })
+        });
 
+        let prelude = r#"
           ;; Better when/if/let macros
           (macro (when pred :rest body) `(if ,pred (do ,@body) ()))
           (macro (when-let assigns :rest body)

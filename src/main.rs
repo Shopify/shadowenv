@@ -14,6 +14,7 @@ extern crate hex;
 extern crate libc;
 extern crate regex;
 extern crate serde_json;
+extern crate shellexpand;
 extern crate signatory;
 extern crate signatory_dalek;
 #[macro_use]
