@@ -18,14 +18,10 @@ page_nav:
 
 # Installation
 
-<div class="callout callout--danger">
-  <p><strong>Alpha Software</strong></p>
-  <p>While you can expect Shadowenv to more or less work, it's very new, and we're still ironing out a lot of bugs. Caveat Emptor.</p>
-</div>
-
-**On macOS, all you have to do is [download the binary from
+**On macOS, you can `brew install shadowenv` or [download the binary from
 GitHub](https://github.com/Shopify/shadowenv/releases) and drop it somewhere on your path.** If this
-build isn't right for your architecture, the only other option for now is to build it manually from source.
+build isn't right for your architecture, the only other option for now is to build it manually from
+source.
 
 ## Building from Source
 
