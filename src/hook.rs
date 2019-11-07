@@ -11,6 +11,7 @@ use crate::undo;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::result::Result;
 use std::str::FromStr;
@@ -41,8 +42,8 @@ impl Modifications {
     }
 }
 
-pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
-    match load_env(shadowenv_data)? {
+pub fn run(pathbuf: PathBuf, shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
+    match load_env(pathbuf, shadowenv_data)? {
         Some((shadowenv, activation)) => {
             apply_env(&shadowenv, mode, activation)?;
             Ok(())
@@ -51,7 +52,10 @@ pub fn run(shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> 
     }
 }
 
-pub fn load_env(shadowenv_data: &str) -> Result<Option<(Shadowenv, bool)>, Error> {
+pub fn load_env(
+    pathbuf: PathBuf,
+    shadowenv_data: &str,
+) -> Result<Option<(Shadowenv, bool)>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -63,7 +67,7 @@ pub fn load_env(shadowenv_data: &str) -> Result<Option<(Shadowenv, bool)>, Error
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    let target: Option<Source> = load_trusted_source()?;
+    let target: Option<Source> = load_trusted_source(pathbuf)?;
 
     match (&active, &target) {
         (None, None) => {
@@ -100,9 +104,8 @@ pub fn load_env(shadowenv_data: &str) -> Result<Option<(Shadowenv, bool)>, Error
 }
 
 /// Load a Source from the current dir, ensuring that it is trusted.
-fn load_trusted_source() -> Result<Option<Source>, Error> {
-    if let Some(root) = loader::find_root(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?
-    {
+fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
+    if let Some(root) = loader::find_root(pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)? {
         if !trust::is_dir_trusted(&root)? {
             return Err(trust::NotTrusted {}.into());
         }

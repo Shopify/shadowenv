@@ -40,6 +40,8 @@ mod trust;
 mod undo;
 
 use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
+use std::env;
+use std::path::PathBuf;
 use std::process;
 
 use crate::hook::VariableOutputMode;
@@ -133,9 +135,14 @@ fn main() {
                 .arg(
                     Arg::with_name("$__shadowenv_data")
                         .long("shadowenv-data")
-                        .short("d")
                         .takes_value(true)
                         .help("If there's already a shadowenv loaded that you might want to undo first, it can be passed in here"),
+                )
+                .arg(
+                    Arg::with_name("dir")
+                        .long("dir")
+                        .takes_value(true)
+                        .help("Instead of searching from the current directory for a .shadowenv.d, search from this one."),
                 )
                 .arg(
                     Arg::with_name("child-argv0")
@@ -185,7 +192,7 @@ fn main() {
                 true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJsonMode,
                 _ => VariableOutputMode::PosixMode,
             };
-            if let Err(err) = hook::run(data, mode) {
+            if let Err(err) = hook::run(env::current_dir().unwrap(), data, mode) {
                 process::exit(output::handle_hook_error(
                     err,
                     shellpid,
@@ -215,7 +222,11 @@ fn main() {
                 (Some(argv0), _) => vec![argv0],
                 (_, _) => unreachable!(),
             };
-            if let Err(err) = execcmd::run(data, argv) {
+            let dir = matches.value_of("dir");
+            let pathbuf = dir
+                .map(|d| PathBuf::from(d))
+                .unwrap_or(env::current_dir().unwrap());
+            if let Err(err) = execcmd::run(pathbuf, data, argv) {
                 eprintln!("{}", err);
                 process::exit(1);
             }
