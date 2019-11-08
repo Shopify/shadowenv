@@ -457,90 +457,7 @@ Returns true if and only if the provided argument is `()`.
 
 `list` evaluates each of its arguments and return them as a list.
 
-# Functions and Macros
-
-## `define`
-
-`(define name expression)`
-
-```scheme
-(define (name [ arguments ...
-                [ :optional arguments ... ]
-                [ :key arguments ... ]
-                [ :rest rest-argument ]
-                ] ) expression)
-```
-
-The `define` operator adds a value or compiled function to the global scope.
-
-```scheme
-; Associates the global name `foo` with the value `123`.
-(define foo 123)
-
-; Associates the global name `bar` with a function that returns twice its input.
-(define (bar a) (* a 2))
-```
-
-When defining a function, if the keyword `:optional` is present in the argument
-list, all following arguments will be optional. If the keyword `:key` is present,
-all following arguments will be optional keyword arguments. If the keyword
-`:rest` is present, the following name will contain any free arguments remaining.
-
-Optional and keyword arguments may be omitted when calling a function.
-If an optional or keyword value is not supplied its value will be `()`.
-A default value can be given when the function is defined.
-
-```scheme
-; Defines a function taking an optional argument, a.
-(define (foo :optional a) a)
-
-; Calls foo with no arguments. The value of `a` will be `()`.
-(foo)
-; Calls foo with arguments. The value of `a` will be `123`.
-(foo 123)
-
-; Defines a function taking an optional keyword argument, a,
-; whose value defaults to `1`.
-(define (bar :key (a 1)) a)
-
-; Calls bar with no arguments. The value of `a` will be `1`.
-(bar)
-; Calls bar with keyword argument. The value of `a` will be `2`.
-(bar :a 2)
-```
-
-## `macro`
-
-`(macro (name [ arguments ... ]) expression)`
-
-The `macro` operator defines a compile-time macro. A macro behaves in all
-respects as any other function, except that it is executed at compile time
-and is expected to return code which is then further compiled.
-
-## `lambda`
-
-`(lambda ( [ arguments ... ] ) expression)`
-
-The `lambda` operator creates a function which may enclose one or more local
-value bindings from the surrounding scope.
-
-```scheme
-(define (adder a)
-  (lambda (b) (+ a b)))
-```
-
-## `apply`
-
-`(apply function [ arguments ... ] argument-list)`
-
-The `apply` operator calls a function with a given series of arguments.
-The argument list consists of any positional arguments except for the last
-argument to `apply`, plus the final, required list argument, which is
-concatenated to positional arguments.
-
-```scheme
-(apply + 1 2 3 '(4 5 6))
-```
+# Variable Binding
 
 ## `let`
 
@@ -558,6 +475,10 @@ execution of its body expression.
 
 <!--
 from ketos, but unsupported/irrelevant
+# define
+# apply
+# lambda
+# macro
 # new
 # =
 # second
