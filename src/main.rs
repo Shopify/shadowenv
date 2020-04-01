@@ -47,6 +47,11 @@ use std::process;
 use crate::hook::VariableOutputMode;
 
 fn main() {
+    let current_dir = match env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => return, // If the current dir was deleted, there's not much we can do. Just exit silently.
+    };
+
     let version = format!(
         "{}.{}.{}{}",
         env!("CARGO_PKG_VERSION_MAJOR"),
@@ -192,7 +197,7 @@ fn main() {
                 true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJsonMode,
                 _ => VariableOutputMode::PosixMode,
             };
-            if let Err(err) = hook::run(env::current_dir().unwrap(), data, mode) {
+            if let Err(err) = hook::run(current_dir, data, mode) {
                 process::exit(output::handle_hook_error(
                     err,
                     shellpid,
@@ -223,9 +228,7 @@ fn main() {
                 (_, _) => unreachable!(),
             };
             let dir = matches.value_of("dir");
-            let pathbuf = dir
-                .map(|d| PathBuf::from(d))
-                .unwrap_or(env::current_dir().unwrap());
+            let pathbuf = dir.map(|d| PathBuf::from(d)).unwrap_or(current_dir);
             if let Err(err) = execcmd::run(pathbuf, data, argv) {
                 eprintln!("{}", err);
                 process::exit(1);

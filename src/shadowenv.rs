@@ -161,7 +161,7 @@ impl Shadowenv {
         self.features.borrow_mut().insert(feature);
     }
 
-    pub fn features(&self) -> (HashSet<Feature>) {
+    pub fn features(&self) -> HashSet<Feature> {
         // This is terribly innefficent, but it's a small data set
         self.features.borrow().iter().cloned().collect()
     }
