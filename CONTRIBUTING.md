@@ -14,7 +14,7 @@
 
 ## (shopify-internal) releasing to `dev`:
 
-1. Open `lib/dev/shadowenv/installer.rb`
-1. Run `shasum -a 256 shadowenv-x86_64-apple-darwin | pbcopy`
-1. Paste the sha256sum to `SHASUM` and increment `VESRION`.
-1. Commit, push, PR, you know the drill.
+1. `dev clone dev`, fetch master, etc.
+1. `dev bump-shopify-repo shadowenv <new-sha>`
+1. `dev test-nix-package shadowenv`
+1. Commit, put, PR, you know the drill.
