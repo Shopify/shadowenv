@@ -1,13 +1,9 @@
-shadowenv() {
-  [[ "$1" == "diff" ]] && "@SELF@" "$@" "${__shadowenv_data:-}" || "@SELF@" "$@"
-}
-
 __shadowenv_hook() {
   local flags; flags=()
   if [[ "$1" == "zsh-preexec" ]]; then
     flags=(--silent)
   fi
-  "@SELF@" hook "${flags[@]}" "${__shadowenv_data:-}" | source /dev/stdin
+  "@SELF@" hook "${flags[@]}" | source /dev/stdin
 }
 
 @HOOKBOOK@

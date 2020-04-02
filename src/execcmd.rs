@@ -4,10 +4,7 @@ use std::path::PathBuf;
 use std::vec::Vec;
 
 /// Execute the provided command (argv) after loading the environment from the current directory
-/// (with respect to the optional $__shadowenv_data (`data`)).
-pub fn run(pathbuf: PathBuf, data: Option<&str>, argv: Vec<&str>) -> Result<(), Error> {
-    let shadowenv_data = data.unwrap_or("");
-
+pub fn run(pathbuf: PathBuf, shadowenv_data: String, argv: Vec<&str>) -> Result<(), Error> {
     match hook::load_env(pathbuf, shadowenv_data)? {
         Some((shadowenv, _)) => {
             hook::mutate_own_env(&shadowenv)?;

@@ -29,20 +29,26 @@ pub enum VariableOutputMode {
 
 #[derive(Serialize, Debug)]
 struct Modifications {
+    schema: String,
     exported: HashMap<String, Option<String>>,
-    unexported: HashMap<String, Option<String>>,
+    unexported: HashMap<String, Option<String>>, // Legacy. Not used, just shows up empty in json
 }
 
 impl Modifications {
-    fn new(shadowenv_data: String, exports: HashMap<String, Option<String>>) -> Modifications {
+    fn new(exports: HashMap<String, Option<String>>) -> Modifications {
         return Modifications {
-            unexported: hashmap! {"__shadowenv_data".to_string() => Some(shadowenv_data)},
+            schema: "v2".to_string(),
             exported: exports,
+            unexported: HashMap::new(),
         };
     }
 }
 
-pub fn run(pathbuf: PathBuf, shadowenv_data: &str, mode: VariableOutputMode) -> Result<(), Error> {
+pub fn run(
+    pathbuf: PathBuf,
+    shadowenv_data: String,
+    mode: VariableOutputMode,
+) -> Result<(), Error> {
     match load_env(pathbuf, shadowenv_data)? {
         Some((shadowenv, activation)) => {
             apply_env(&shadowenv, mode, activation)?;
@@ -54,7 +60,7 @@ pub fn run(pathbuf: PathBuf, shadowenv_data: &str, mode: VariableOutputMode) -> 
 
 pub fn load_env(
     pathbuf: PathBuf,
-    shadowenv_data: &str,
+    shadowenv_data: String,
 ) -> Result<Option<(Shadowenv, bool)>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
@@ -114,17 +120,15 @@ fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
     Ok(None)
 }
 
-pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<String, Error> {
-    let shadowenv_data = shadowenv.format_shadowenv_data()?;
-
-    for (k, v) in shadowenv.exports() {
+pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
+    for (k, v) in shadowenv.exports()? {
         match v {
             Some(s) => env::set_var(k, &s),
             None => env::remove_var(k),
         }
     }
 
-    Ok(shadowenv_data)
+    Ok(())
 }
 
 pub fn apply_env(
@@ -132,12 +136,9 @@ pub fn apply_env(
     mode: VariableOutputMode,
     activation: bool,
 ) -> Result<(), Error> {
-    let shadowenv_data = shadowenv.format_shadowenv_data()?;
-
     match mode {
         VariableOutputMode::PosixMode => {
-            println!("__shadowenv_data={}", shell_escape(&shadowenv_data));
-            for (k, v) in shadowenv.exports() {
+            for (k, v) in shadowenv.exports()? {
                 match v {
                     Some(s) => println!("export {}={}", k, shell_escape(&s)),
                     None => println!("unset {}", k),
@@ -146,8 +147,7 @@ pub fn apply_env(
             output::print_activation_to_tty(activation, shadowenv.features());
         }
         VariableOutputMode::FishMode => {
-            println!("set -g __shadowenv_data {}", shell_escape(&shadowenv_data));
-            for (k, v) in shadowenv.exports() {
+            for (k, v) in shadowenv.exports()? {
                 match v {
                     Some(s) => {
                         if k == "PATH" {
@@ -166,13 +166,12 @@ pub fn apply_env(
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>
-            // opcodes: 1: set, unexported
+            // opcodes: 1: set, unexported (unused)
             //          2: set, exported
             //          3: unset (value is empty)
             // field separator is 0x1F; record separator is 0x1E. There's a trailing record
             // separator because I'm lazy but don't depend on it not going away.
-            print!("\x01\x1F__shadowenv_data\x1F{}\x1E", shadowenv_data);
-            for (k, v) in shadowenv.exports() {
+            for (k, v) in shadowenv.exports()? {
                 match v {
                     Some(s) => print!("\x02\x1F{}\x1F{}\x1E", k, s),
                     None => print!("\x03\x1F{}\x1F\x1E", k),
@@ -180,11 +179,11 @@ pub fn apply_env(
             }
         }
         VariableOutputMode::JsonMode => {
-            let modifs = Modifications::new(shadowenv_data, shadowenv.exports());
+            let modifs = Modifications::new(shadowenv.exports()?);
             println!("{}", serde_json::to_string(&modifs).unwrap());
         }
         VariableOutputMode::PrettyJsonMode => {
-            let modifs = Modifications::new(shadowenv_data, shadowenv.exports());
+            let modifs = Modifications::new(shadowenv.exports()?);
             println!("{}", serde_json::to_string_pretty(&modifs).unwrap());
         }
     }

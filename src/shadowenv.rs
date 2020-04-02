@@ -2,6 +2,7 @@ use failure::Error;
 
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
+use std::env;
 
 use crate::features::Feature;
 use crate::undo;
@@ -24,6 +25,13 @@ pub struct Shadowenv {
 }
 
 impl Shadowenv {
+    pub fn load_shadowenv_data_or_legacy_fallback(fallback_data: Option<String>) -> String {
+        match env::var("__shadowenv_data") {
+            Ok(priority_data) => priority_data,
+            Err(_) => fallback_data.unwrap_or("".to_string()),
+        }
+    }
+
     pub fn new(
         env: HashMap<String, String>,
         shadowenv_data: undo::Data,
@@ -100,14 +108,19 @@ impl Shadowenv {
         data
     }
 
-    pub fn format_shadowenv_data(&self) -> Result<String, Error> {
+    fn format_shadowenv_data(&self) -> Result<String, Error> {
         let d = self.shadowenv_data();
         Ok(format!("{:016x}:", self.target_hash).to_string() + &serde_json::to_string(&d)?)
     }
 
-    pub fn exports(&self) -> HashMap<String, Option<String>> {
+    pub fn exports(&self) -> Result<HashMap<String, Option<String>>, Error> {
         let mut changes: HashMap<String, Option<String>> = HashMap::new();
         let varnames = self.all_relevant_varnames();
+
+        changes.insert(
+            "__shadowenv_data".to_string(),
+            Some(self.format_shadowenv_data()?),
+        );
 
         let env = self.env.borrow();
         for varname in varnames {
@@ -117,7 +130,7 @@ impl Shadowenv {
                 changes.insert(varname, a.cloned());
             }
         }
-        changes
+        Ok(changes)
     }
 
     pub fn set(&self, a: &str, b: Option<&str>) -> () {
