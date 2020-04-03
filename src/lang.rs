@@ -244,7 +244,10 @@ impl ShadowLang {
             return Err(err);
         };
 
-        for source_file in &source.files {
+        let mut files = source.files.clone();
+        files.sort();
+
+        for source_file in &files {
             let fname = format!("__shadowenv__{}", source_file.name);
             let prog = format!("(define ({} env) (do {}))", fname, source_file.contents);
 
@@ -259,7 +262,7 @@ impl ShadowLang {
             };
         }
 
-        for source_file in source.files {
+        for source_file in &files {
             let fname = format!("__shadowenv__{}", source_file.name);
             if let Err(err) = interp.call(&fname, vec![Value::Foreign(shadowenv.clone())]) {
                 // TODO: error type?
