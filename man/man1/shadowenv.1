@@ -17,7 +17,7 @@ Do not use color to highlight the diff
 \fB\-v\fR, \fB\-\-verbose\fR
 Show all environment variables as context to the diff
 
-.SS \fBhook\fR [FLAGS] [OPTIONS] \fB$__shadowenv_data\fR
+.SS \fBhook\fR [FLAGS] [OPTIONS]
 Runs the shell hook. You shouldn't need to run this manually; instead, source the output of \fBshadowenv init\fR to create the shell hooks that will use this command.
 
 .TP
@@ -35,10 +35,6 @@ Suppress error printing
 .TP
 \fB\-\-shellpid\fR \fIpid\fR
 Rather than looking up the PPID, use this as the shell's pid
-
-.TP
-\fB$__shadowenv_data\fR
-The contents of the \fB$__shadowenv_data\fR environment variable
 
 .SS \fBinit\fR \fIshell\fR
 Prints a script which can be eval'd to set up shadowenv in various shells

@@ -40,10 +40,13 @@ For the most part, you're probably going to want to use `--json`. One important 
 understand about the way we build Shadowenv integrations is that Shadowenv will instruct the calling
 process to export all of the variables it sets ("exporting" a variable means that it will be
 inherited by child processes: really it means that the variable is an actual environment variable,
-not just a variable somewhere in the process's own memory). There is an exception to this rule
-however: Shadowenv also provides a variable to set, named `__shadowenv_data`, which should not be
-exported. This variable is meant to be held on to by the calling process but not exported to
-children. The `--json`/`--pretty-json` output modes make this clear:
+not just a variable somewhere in the process's own memory).
+
+Previous versions of Shadowenv (prior to 2.0.0) had a special-case for the variable
+`__shadowenv_data`, which was listed as an "unexported" variable, to be set only in the process
+managing the environment.
+
+When receiving data from Shadowenv 1.3.x and earlier, you will see something like:
 
 ```
 $ shadowenv hook --pretty-json ''
@@ -54,6 +57,26 @@ $ shadowenv hook --pretty-json ''
   }
 }
 ```
+
+However, with 2.0.0 and later, you will simply see:
+
+```
+$ shadowenv hook --pretty-json ''
+{
+  "schema": "v2",
+  "exported": {
+    "__shadowenv_data": "...",
+    "...": "..."
+  },
+  "unexported": {}
+}
+```
+
+Note that we've added a "schema" field, and that schema v3 will almost certainly remove the
+"unexported" element, so make sure not to depend on its presence.
+
+Our suggestion moving forward into 2.0.0 and later is to treat "unexported" values read from 1.3.2
+and earlier the same as "exported" values.
 
 You can look at any or all of the editor integrations above for a roadmap to implementing your own,
 but here's a minimal example in Ruby to get you started.
@@ -72,12 +95,9 @@ def on_some_event
 
   data = JSON.parse(stdout)
 
-  data['unexported'].each do |name, value|
-    if name == '__shadowenv_data'
-      $shadowenv_data = value
-    else
-      $stderr.puts('unexpected unexported value')
-    end
+  # Don't assume this will exist: it will go away in schema v3.
+  data.fetch('unexported', {}).each do |name, value|
+    ENV[name] = value
   end
 
   data['exported'].each do |name, value|

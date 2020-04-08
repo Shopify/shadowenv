@@ -1,13 +1,5 @@
-function shadowenv
-  if test "$argv[1]" = "diff"
-    "@SELF@" $argv "$__shadowenv_data"
-  else
-    "@SELF@" $argv
-  end
-end
-
 function __shadowenv_hook --on-event fish_prompt --on-variable PWD
-  @SELF@ hook --fish "$__shadowenv_data" \
+  @SELF@ hook --fish \
     | while read line
       eval "$line" 2>/dev/null
     end

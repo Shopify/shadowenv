@@ -1,7 +1,3 @@
-shadowenv() {
-  [[ "$1" == "diff" ]] && "@SELF@" "$@" "${__shadowenv_data:-}" || "@SELF@" "$@"
-}
-
 __shadowenv_hook() {
   local flags; flags=(--shellpid "$$")
   if [[ "$1" == "preexec" ]]; then
@@ -9,7 +5,7 @@ __shadowenv_hook() {
   fi
   # We can't do the nice `x | source /dev/stdin` trick in old versions of bash,
   # meaning we need a subshell, so we can't just let shadowenv look up its ppid.
-  eval "$("@SELF@" hook "${flags[@]}" "${__shadowenv_data:-}")"
+  eval "$("@SELF@" hook "${flags[@]}")"
 }
 
 @HOOKBOOK@

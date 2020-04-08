@@ -17,8 +17,6 @@ extern crate serde_json;
 extern crate shellexpand;
 extern crate signatory;
 extern crate signatory_dalek;
-#[macro_use]
-extern crate maplit;
 
 #[cfg(test)]
 extern crate quickcheck;
@@ -39,6 +37,7 @@ mod shadowenv;
 mod trust;
 mod undo;
 
+use crate::shadowenv::Shadowenv;
 use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
 use std::env;
 use std::path::PathBuf;
@@ -67,7 +66,11 @@ fn main() {
             SubCommand::with_name("hook")
                 .about("Runs the shell hook. You shouldn't need to run this manually.")
                 .setting(AppSettings::DisableHelpSubcommand)
-                .arg(Arg::with_name("$__shadowenv_data").required(true))
+                .arg(
+                    // Legacy: This is exported now, and in fact this setting is ignored
+                    // completely if $__shadowenv_data is present in the environment.
+                    Arg::with_name("$__shadowenv_data").required(false)
+                )
                 .arg(
                     Arg::with_name("fish")
                         .long("fish")
@@ -124,7 +127,11 @@ fn main() {
                         .short("n")
                         .help("Do not use color to highlight the diff"),
                 )
-                .arg(Arg::with_name("$__shadowenv_data").required(true)),
+                .arg(
+                    // Legacy: This is exported now, and in fact this setting is ignored
+                    // completely if $__shadowenv_data is present in the environment.
+                    Arg::with_name("$__shadowenv_data").required(false)
+                ),
         )
         .subcommand(
             SubCommand::with_name("trust")
@@ -138,10 +145,11 @@ fn main() {
                 )
                 .setting(AppSettings::DisableHelpSubcommand)
                 .arg(
+                    // Legacy: This is exported now, and this flag will likely go away soon.
                     Arg::with_name("$__shadowenv_data")
                         .long("shadowenv-data")
                         .takes_value(true)
-                        .help("If there's already a shadowenv loaded that you might want to undo first, it can be passed in here"),
+                        .help("Legacy, will be removed soon: Don't use this; provide $__shadowenv_data in the environment instead"),
                 )
                 .arg(
                     Arg::with_name("dir")
@@ -187,7 +195,8 @@ fn main() {
 
     match app_matches.subcommand() {
         ("hook", Some(matches)) => {
-            let data = matches.value_of("$__shadowenv_data").unwrap();
+            let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
+            let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
             let shellpid = determine_shellpid_or_crash(matches.value_of("shellpid"));
 
             let mode = match true {
@@ -208,7 +217,8 @@ fn main() {
         ("diff", Some(matches)) => {
             let verbose = matches.is_present("verbose");
             let color = !matches.is_present("no-color");
-            let data = matches.value_of("$__shadowenv_data").unwrap();
+            let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
+            let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
             process::exit(diff::run(verbose, color, data));
         }
         ("trust", Some(_)) => {
@@ -218,7 +228,8 @@ fn main() {
             }
         }
         ("exec", Some(matches)) => {
-            let data = matches.value_of("$__shadowenv_data");
+            let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
+            let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
             let argv: Vec<&str> = match (
                 matches.value_of("child-argv0"),
                 matches.values_of("child-argv"),

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::env;
 
 /// print a diff of the env
-pub fn run(verbose: bool, color: bool, shadowenv_data: &str) -> i32 {
+pub fn run(verbose: bool, color: bool, shadowenv_data: String) -> i32 {
     let mut parts = shadowenv_data.splitn(2, ":");
     let _prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
