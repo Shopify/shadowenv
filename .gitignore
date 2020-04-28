@@ -7,3 +7,5 @@
 /spec/reports/
 /tmp/
 /target
+/sh/completions/
+!/sh/completions/.keep

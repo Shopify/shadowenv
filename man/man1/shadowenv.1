@@ -17,6 +17,21 @@ Do not use color to highlight the diff
 \fB\-v\fR, \fB\-\-verbose\fR
 Show all environment variables as context to the diff
 
+.SS \fBexec\fR [\fB--dir\fR <\fBdir\fR>] <\fBchild-argv0\fR|\fB-- child-argv...\fR>
+Execute a command after loading the environment from the current directory.
+
+.TP
+\fB\-\-dir\fR <\fBdir\fR>
+Instead of searching from the current directory for a .shadowenv.d, search from this one.
+
+.TP
+\fBchild-argv0\fR
+If the command doesn't need arguments, it can be passed directly as the last arugment.
+
+.TP
+\fBchild-argv...\fR
+If the command requires arguments, they must all be passed after a '--'.
+
 .SS \fBhook\fR [FLAGS] [OPTIONS]
 Runs the shell hook. You shouldn't need to run this manually; instead, source the output of \fBshadowenv init\fR to create the shell hooks that will use this command.
 
