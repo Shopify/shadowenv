@@ -856,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "shadowenv"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "atty 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
