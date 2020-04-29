@@ -143,22 +143,4 @@ pub fn app() -> App<'static, 'static> {
                         .about("Prints a script which can be eval'd by fish to set up shadowenv."),
                 )
         )
-        .subcommand(
-            SubCommand::with_name("completion")
-                .about("Prints a script which can be eval'd to set up shadowenv completions in various shells.")
-                .setting(AppSettings::SubcommandRequiredElseHelp)
-                .setting(AppSettings::DisableHelpSubcommand)
-                .subcommand(
-                    SubCommand::with_name("bash")
-                        .about("Prints a script which can be eval'd by bash to set up shadowenv completions."),
-                )
-                .subcommand(
-                    SubCommand::with_name("zsh")
-                        .about("Prints a script which can be eval'd by zsh to set up shadowenv completions."),
-                )
-                .subcommand(
-                    SubCommand::with_name("fish")
-                        .about("Prints a script which can be eval'd by fish to set up shadowenv completions."),
-                )
-        )
 }
