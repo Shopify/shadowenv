@@ -5,7 +5,7 @@ use std::vec::Vec;
 
 /// Execute the provided command (argv) after loading the environment from the current directory
 pub fn run(pathbuf: PathBuf, shadowenv_data: String, argv: Vec<&str>) -> Result<(), Error> {
-    match hook::load_env(pathbuf, shadowenv_data)? {
+    match hook::load_env(pathbuf, shadowenv_data, false)? {
         Some((shadowenv, _)) => {
             hook::mutate_own_env(&shadowenv)?;
         }

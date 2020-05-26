@@ -3,9 +3,13 @@ __shadowenv_hook() {
   if [[ "$1" == "preexec" ]]; then
     flags+=(--silent)
   fi
+  if [[ ! -v __shadowenv_first_run ]]; then
+    flags+=(--force)
+  fi
   # We can't do the nice `x | source /dev/stdin` trick in old versions of bash,
   # meaning we need a subshell, so we can't just let shadowenv look up its ppid.
   eval "$("@SELF@" hook "${flags[@]}")"
+  __shadowenv_first_run=1
 }
 
 @HOOKBOOK@

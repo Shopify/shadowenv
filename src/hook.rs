@@ -48,8 +48,9 @@ pub fn run(
     pathbuf: PathBuf,
     shadowenv_data: String,
     mode: VariableOutputMode,
+    force: bool,
 ) -> Result<(), Error> {
-    match load_env(pathbuf, shadowenv_data)? {
+    match load_env(pathbuf, shadowenv_data, force)? {
         Some((shadowenv, activation)) => {
             apply_env(&shadowenv, mode, activation)?;
             Ok(())
@@ -61,6 +62,7 @@ pub fn run(
 pub fn load_env(
     pathbuf: PathBuf,
     shadowenv_data: String,
+    force: bool,
 ) -> Result<Option<(Shadowenv, bool)>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
@@ -79,7 +81,7 @@ pub fn load_env(
         (None, None) => {
             return Ok(None);
         }
-        (Some(a), Some(t)) if a.hash == t.hash()? => {
+        (Some(a), Some(t)) if a.hash == t.hash()? && !force => {
             return Ok(None);
         }
         (_, _) => (),
