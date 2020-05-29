@@ -36,7 +36,7 @@ pub fn app() -> App<'static, 'static> {
                 .arg(
                     Arg::with_name("force")
                         .long("force")
-                        .help("USE THE FORCE"),
+                        .help("Force the shadowenv to be applied, even if the working directory has not changed."),
                 )
                 .arg(
                     Arg::with_name("silent")
