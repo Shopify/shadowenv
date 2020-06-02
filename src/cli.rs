@@ -34,6 +34,11 @@ pub fn app() -> App<'static, 'static> {
                         .help("Format variable assignments for posix shells (default)"),
                 )
                 .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .help("Force the shadowenv to be applied, even if the working directory has not changed."),
+                )
+                .arg(
                     Arg::with_name("silent")
                         .long("silent")
                         .help("Suppress error printing"),

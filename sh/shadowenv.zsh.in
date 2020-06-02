@@ -3,8 +3,14 @@ __shadowenv_hook() {
   if [[ "$1" == "zsh-preexec" ]]; then
     flags=(--silent)
   fi
+  if [[ -n $__shadowenv_force_run ]]; then
+    flags+=(--force)
+    unset __shadowenv_force_run
+  fi
   "@SELF@" hook "${flags[@]}" | source /dev/stdin
 }
 
 @HOOKBOOK@
+
+__shadowenv_force_run=1
 hookbook_add_hook __shadowenv_hook

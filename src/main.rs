@@ -56,6 +56,7 @@ fn main() {
             let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
             let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
             let shellpid = determine_shellpid_or_crash(matches.value_of("shellpid"));
+            let force = matches.is_present("force");
 
             let mode = match true {
                 true if matches.is_present("porcelain") => VariableOutputMode::PorcelainMode,
@@ -64,7 +65,7 @@ fn main() {
                 true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJsonMode,
                 _ => VariableOutputMode::PosixMode,
             };
-            if let Err(err) = hook::run(current_dir, data, mode) {
+            if let Err(err) = hook::run(current_dir, data, mode, force) {
                 process::exit(output::handle_hook_error(
                     err,
                     shellpid,
