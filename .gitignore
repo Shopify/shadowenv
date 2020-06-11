@@ -9,3 +9,4 @@
 /target
 /sh/completions/
 !/sh/completions/.keep
+/result
