@@ -39,7 +39,40 @@ us to do things like simulate `chruby reset` upon entry into a directory without
 ```
 
 The intention isn't really for users to write these files directly, nor to commit them to
-repositories , but for other tool authors to generate configuration on the user's machine.
+repositories , but for other tool authors to generate configuration on the user's machine. Here's
+an example of a generated Shadowlisp file for activating ruby 2.7.1:
+
+```scheme
+(provide "ruby" "2.7.1")
+
+(when-let ((ruby-root (env/get "RUBY_ROOT")))
+ (env/remove-from-pathlist "PATH" (path-concat ruby-root "bin"))
+ (when-let ((gem-root (env/get "GEM_ROOT")))
+   (env/remove-from-pathlist "PATH" (path-concat gem-root "bin")))
+ (when-let ((gem-home (env/get "GEM_HOME")))
+   (env/remove-from-pathlist "PATH" (path-concat gem-home "bin"))))
+
+(env/set "GEM_PATH" ())
+(env/set "GEM_HOME" ())
+(env/set "RUBYOPT" ())
+
+(env/set "RUBY_ROOT" "/opt/rubies/2.7.1")
+(env/prepend-to-pathlist "PATH" "/opt/rubies/2.7.1/bin")
+(env/set "RUBY_ENGINE" "ruby")
+(env/set "RUBY_VERSION" "2.7.1")
+(env/set "GEM_ROOT" "/opt/rubies/2.7.1/lib/ruby/gems/2.7.0")
+
+(when-let ((gem-root (env/get "GEM_ROOT")))
+  (env/prepend-to-pathlist "GEM_PATH" gem-root)
+  (env/prepend-to-pathlist "PATH" (path-concat gem-root "bin")))
+
+(let ((gem-home
+      (path-concat (env/get "HOME") ".gem" (env/get "RUBY_ENGINE") (env/get "RUBY_VERSION"))))
+  (do
+    (env/set "GEM_HOME" gem-home)
+    (env/prepend-to-pathlist "GEM_PATH" gem-home)
+    (env/prepend-to-pathlist "PATH" (path-concat gem-home "bin"))))
+```
 
 ## `.shadowenv.d`
 
