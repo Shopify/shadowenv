@@ -1,12 +1,12 @@
 use crate::hash::Source;
 use crate::shadowenv::Shadowenv;
 
+use failure::Fail;
 use ketos::{Error, FromValueRef, Value};
+use ketos::{ForeignValue, FromValue};
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
-use failure::Fail;
-use ketos::{ForeignValue, FromValue};
 pub struct ShadowLang {}
 
 #[derive(Fail, Debug)]

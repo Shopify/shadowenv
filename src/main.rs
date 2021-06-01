@@ -13,10 +13,10 @@ mod trust;
 mod undo;
 
 use crate::shadowenv::Shadowenv;
+use failure::format_err;
 use std::env;
 use std::path::PathBuf;
 use std::process;
-use failure::format_err;
 
 use crate::hook::VariableOutputMode;
 

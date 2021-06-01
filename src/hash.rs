@@ -1,13 +1,12 @@
+use blake2::digest::{Input, VariableOutput};
+use blake2::VarBlake2b;
+use failure::{Error, Fail};
 use std::cmp::Ord;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::result::Result;
 use std::str::FromStr;
 use std::u64;
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
-use failure::{Error,Fail};
-
 
 const FILE_SEPARATOR: &'static str = "\x1C";
 const GROUP_SEPARATOR: &'static str = "\x1D";
@@ -105,7 +104,7 @@ mod tests {
     use super::*;
     use quickcheck::Arbitrary;
     use quickcheck::Gen;
-	use quickcheck_macros::quickcheck;
+    use quickcheck_macros::quickcheck;
     #[test]
     fn test_key_encoding() {
         let key = Hash { hash: 2 };

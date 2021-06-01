@@ -1,19 +1,19 @@
 use crate::loader;
 
-use failure::{Error,Fail};
+use failure::{Error, Fail};
 //use signatory::{ed25519, Ed25519Signature, PublicKeyed};
 // use signatory_dalek::{Ed25519Signer, Ed25519Verifier};
 
+use ed25519_dalek::Keypair;
+use ed25519_dalek::Verifier;
+use ed25519_dalek::{Signature, Signer};
+use rand::rngs::OsRng;
 use std::env;
 use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::fs::{self, File};
 use std::io::{prelude::*, ErrorKind};
 use std::path::{Path, PathBuf};
-use ed25519_dalek::Keypair;
-use ed25519_dalek::{Signature, Signer};
-use ed25519_dalek::Verifier;
-use rand::rngs::OsRng;
 
 #[derive(Fail, Debug)]
 #[fail(display = "no shadowenv found")]
@@ -69,7 +69,7 @@ fn load_or_generate_signer() -> Result<Keypair, Error> {
             Ok(seed)
         }
         None => {
-            let mut csprng = OsRng{};
+            let mut csprng = OsRng {};
             let seed = Keypair::generate(&mut csprng);
             std::fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
             let mut file = match File::create(OsString::from(&path)) {

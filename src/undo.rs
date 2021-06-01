@@ -1,7 +1,7 @@
 use std::result::Result;
 
 use failure::Error;
-use serde_derive::{Serialize,Deserialize};
+use serde_derive::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Scalar {
     #[serde(default)]
