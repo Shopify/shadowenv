@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         # Pin temporarily because rustfmt is not available in nightly
-        rust: [stable, beta, nightly-2019-10-04]
+        rust: [stable]
 
     steps:
     - uses: hecrj/setup-rust-action@v1.2.0
