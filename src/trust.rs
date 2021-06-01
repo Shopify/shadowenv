@@ -1,8 +1,8 @@
 use crate::loader;
 
-use failure::Error;
-use signatory::{ed25519, Ed25519Signature, PublicKeyed};
-use signatory_dalek::{Ed25519Signer, Ed25519Verifier};
+use failure::{Error,Fail};
+//use signatory::{ed25519, Ed25519Signature, PublicKeyed};
+// use signatory_dalek::{Ed25519Signer, Ed25519Verifier};
 
 use std::env;
 use std::ffi::OsString;
@@ -10,6 +10,10 @@ use std::fs::OpenOptions;
 use std::fs::{self, File};
 use std::io::{prelude::*, ErrorKind};
 use std::path::{Path, PathBuf};
+use ed25519_dalek::Keypair;
+use ed25519_dalek::{Signature, Signer};
+use ed25519_dalek::Verifier;
+use rand::rngs::OsRng;
 
 #[derive(Fail, Debug)]
 #[fail(display = "no shadowenv found")]
@@ -29,7 +33,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
         Some(r) => r,
     };
 
-    let pubkey = signer.public_key().unwrap();
+    let pubkey = signer.public;
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let d = root.display().to_string();
@@ -45,14 +49,13 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
     match r_o_bytes? {
         None => Ok(false),
         Some(bytes) => {
-            let sig = Ed25519Signature::new(from_vec(bytes));
-            let verifier = Ed25519Verifier::from(&pubkey);
-            Ok(ed25519::verify(&verifier, msg, &sig).is_ok())
+            let sig = Signature::new(from_vec(bytes));
+            Ok(signer.verify(msg, &sig).is_ok())
         }
     }
 }
 
-fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
+fn load_or_generate_signer() -> Result<Keypair, Error> {
     let path = format!("{}/.config/shadowenv/trust-key", std::env::var("HOME")?);
 
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(&path)) {
@@ -62,12 +65,12 @@ fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
     };
     match r_o_bytes? {
         Some(bytes) => {
-            let seed = ed25519::Seed::from_bytes(bytes)?;
-            Ok(Ed25519Signer::from(&seed))
+            let seed = Keypair::from_bytes(&bytes)?;
+            Ok(seed)
         }
         None => {
-            let seed = ed25519::Seed::generate();
-
+            let mut csprng = OsRng{};
+            let seed = Keypair::generate(&mut csprng);
             std::fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
             let mut file = match File::create(OsString::from(&path)) {
                 // TODO: error type
@@ -75,9 +78,9 @@ fn load_or_generate_signer() -> Result<Ed25519Signer, Error> {
                 Ok(f) => f,
             };
 
-            file.write(seed.as_secret_slice())?;
+            file.write(&seed.to_bytes())?;
 
-            Ok(Ed25519Signer::from(&seed))
+            Ok(seed)
         }
     }
 }
@@ -93,9 +96,9 @@ pub fn run() -> Result<(), Error> {
 
     let d = root.display().to_string();
     let msg = d.as_bytes();
-    let sig = ed25519::sign(&signer, msg).unwrap();
+    let sig = signer.sign(msg);
 
-    let pubkey = signer.public_key().unwrap();
+    let pubkey = signer.public;
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let path = trust_file(&root, fingerprint);
@@ -108,7 +111,7 @@ pub fn run() -> Result<(), Error> {
 
     write_gitignore(root)?;
 
-    match file.write_all(sig.as_bytes()) {
+    match file.write_all(&sig.to_bytes()) {
         // TODO: error type
         Err(why) => panic!("couldn't write to {:?}: {}", path, why),
         Ok(_) => Ok(()),

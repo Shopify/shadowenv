@@ -7,7 +7,7 @@ use std::env;
 use crate::features::Feature;
 use crate::undo;
 use serde_json;
-
+use ketos_derive::{ForeignValue,FromValueRef};
 #[derive(Debug, ForeignValue, FromValueRef)]
 pub struct Shadowenv {
     /// the mutated/modified env: the final state we want to be in after eval'ing exports.

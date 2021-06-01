@@ -4,11 +4,10 @@ use std::convert::TryInto;
 use std::result::Result;
 use std::str::FromStr;
 use std::u64;
-
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use failure::{Error,Fail};
 
-use failure::Error;
 
 const FILE_SEPARATOR: &'static str = "\x1C";
 const GROUP_SEPARATOR: &'static str = "\x1D";
@@ -91,7 +90,7 @@ impl FromStr for Hash {
             return Err(WrongInputSize {}.into());
         }
         let hash = u64::from_str_radix(&key, 16)?;
-        Ok(Hash { hash: hash })
+        Ok(Hash { hash })
     }
 }
 
@@ -106,7 +105,7 @@ mod tests {
     use super::*;
     use quickcheck::Arbitrary;
     use quickcheck::Gen;
-
+	use quickcheck_macros::quickcheck;
     #[test]
     fn test_key_encoding() {
         let key = Hash { hash: 2 };
@@ -117,7 +116,7 @@ mod tests {
     }
 
     impl Arbitrary for Source {
-        fn arbitrary<G: Gen>(g: &mut G) -> Source {
+        fn arbitrary(g: &mut Gen) -> Source {
             Source {
                 files: Arbitrary::arbitrary(g),
             }
@@ -125,7 +124,7 @@ mod tests {
     }
 
     impl Arbitrary for SourceFile {
-        fn arbitrary<G: Gen>(g: &mut G) -> SourceFile {
+        fn arbitrary(g: &mut Gen) -> SourceFile {
             SourceFile {
                 name: Arbitrary::arbitrary(g),
                 contents: Arbitrary::arbitrary(g),
@@ -134,7 +133,7 @@ mod tests {
     }
 
     impl Arbitrary for Hash {
-        fn arbitrary<G: Gen>(g: &mut G) -> Hash {
+        fn arbitrary(g: &mut Gen) -> Hash {
             Hash {
                 hash: Arbitrary::arbitrary(g),
             }

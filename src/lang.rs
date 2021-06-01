@@ -5,7 +5,8 @@ use ketos::{Error, FromValueRef, Value};
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
-
+use failure::Fail;
+use ketos::{ForeignValue, FromValue};
 pub struct ShadowLang {}
 
 #[derive(Fail, Debug)]

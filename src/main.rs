@@ -1,29 +1,3 @@
-extern crate ketos;
-#[macro_use]
-extern crate ketos_derive;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate failure;
-extern crate atty;
-extern crate clap;
-extern crate dirs;
-extern crate exec;
-extern crate hex;
-extern crate libc;
-extern crate regex;
-extern crate serde_json;
-extern crate shellexpand;
-extern crate signatory;
-extern crate signatory_dalek;
-
-#[cfg(test)]
-extern crate quickcheck;
-#[cfg(test)]
-#[macro_use(quickcheck)]
-extern crate quickcheck_macros;
-
 mod cli;
 mod diff;
 mod execcmd;
@@ -42,6 +16,7 @@ use crate::shadowenv::Shadowenv;
 use std::env;
 use std::path::PathBuf;
 use std::process;
+use failure::format_err;
 
 use crate::hook::VariableOutputMode;
 

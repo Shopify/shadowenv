@@ -3,7 +3,7 @@ use crate::loader;
 use crate::trust;
 
 use atty::{isnt, Stream};
-use failure::Error;
+use failure::{Error,format_err};
 use regex::Regex;
 use std::collections::HashSet;
 use std::env;
