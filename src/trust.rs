@@ -1,9 +1,6 @@
 use crate::loader;
 
 use failure::{Error, Fail};
-//use signatory::{ed25519, Ed25519Signature, PublicKeyed};
-// use signatory_dalek::{Ed25519Signer, Ed25519Verifier};
-
 use ed25519_dalek::Keypair;
 use ed25519_dalek::Verifier;
 use ed25519_dalek::{Signature, Signer};
