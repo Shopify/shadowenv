@@ -1,9 +1,9 @@
 use crate::loader;
 
-use failure::{Error, Fail};
 use ed25519_dalek::Keypair;
 use ed25519_dalek::Verifier;
 use ed25519_dalek::{Signature, Signer};
+use failure::{Error, Fail};
 use rand::rngs::OsRng;
 use std::env;
 use std::ffi::OsString;
