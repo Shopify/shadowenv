@@ -83,9 +83,9 @@ Make sure to restart your shell after adding this.
 Shadowenv constantly scans your current directory, and all of its parents, for a directory named
 `.shadowenv.d`. The nearest one wins, just like if you have nested git repositories.
 
-When a `.shadowenv.d` directory is found, Shadowenv first checks that you've [Trusted](/trust) it.
+When a `.shadowenv.d` directory is found, Shadowenv first checks that you've [Trusted]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/trust) it.
 Then, it looks for any files ending with `.lisp` in that directory, and runs them as
-[Shadowlisp](/shadowlisp).
+[Shadowlisp]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/shadowlisp).
 
 Here's an example of what a Shadowlisp file might look like:
 
@@ -110,8 +110,8 @@ Next, `cd ..` to get out of the directory containing the shadowenv. You will see
 shadowenv." printed automatically. If you `echo $DEBUG`, you'll see whatever value you had prior to
 creating the Shadowenv: most likely no value.
 
-Those are the basics! There's a bit [more you can do with Shadowlisp](/shadowlisp), and we have some
-[suggestions](/best-practices) for how to actually use Shadowenv in an organization.
+Those are the basics! There's a bit [more you can do with Shadowlisp]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/shadowlisp), and we have some
+[suggestions]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/best-practices) for how to actually use Shadowenv in an organization.
 
 ### Add to your editor or IDE
 
@@ -119,7 +119,7 @@ Depending on you use your editor, you may find it helpful to have the same envir
 settings as in your shell. We have plugins for most common editors, and writing new plugins is
 relatively straightforward.
 
-Check out the [Integration](/integration) page for more information and a list of available plugins.
+Check out the [Integration]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/integration) page for more information and a list of available plugins.
 
 # Usage in Scripts
 
