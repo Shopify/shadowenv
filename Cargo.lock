@@ -1139,7 +1139,7 @@ dependencies = [
 
 [[package]]
 name = "shadowenv"
-version = "2.0.3"
+version = "2.0.4"
 dependencies = [
  "atty",
  "blake2",

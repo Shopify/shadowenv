@@ -7,7 +7,7 @@ rustPlatform.buildRustPackage rec {
     (lib.findFirst (line: lib.hasPrefix ''version = "'' line) ''version = ""''
       (lib.splitString "\n" (builtins.readFile (./. + "/Cargo.toml")))));
   src = builtins.fetchGit { url = "file://${builtins.toString ./.}"; };
-  cargoSha256 = "1bjkwn57vm3in8lajhm7p9fjwyqhmkrb3fyq1k7lqjvrrh9jysb2";
+  cargoSha256 = "09lyyvcn2x5f386sipimrdkhd2vgysfmh44r2vb3hrbwnscnibsz";
   nativeBuildInputs = [ installShellFiles ];
   buildInputs =
     lib.optionals stdenv.isDarwin [ darwin.apple_sdk.frameworks.Security ];
@@ -20,7 +20,7 @@ rustPlatform.buildRustPackage rec {
     installShellCompletion --zsh sh/completions/_shadowenv
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://shopify.github.io/shadowenv/";
     description =
       "reversible directory-local environment variable manipulations";
