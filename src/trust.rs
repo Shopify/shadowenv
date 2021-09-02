@@ -52,7 +52,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
 }
 
 fn load_or_generate_signer() -> Result<Keypair, Error> {
-    let path = format!("{}/.config/shadowenv/trust-key", std::env::var("HOME")?);
+    let path = format!("{}/.config/shadowenv/trust-key-v2", std::env::var("HOME")?);
 
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(&path)) {
         Ok(bytes) => Ok(Some(bytes)),
