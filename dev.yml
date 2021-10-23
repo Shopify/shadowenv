@@ -2,10 +2,16 @@ name: shadowenv
 
 up:
   - rust
+  - custom:
+      name: Add rustup targets
+      met?: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      meet: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
 commands:
-  build:     cargo build
-  test:      cargo test
-  run-built: target/debug/shadowenv
-  add-man:   cp -r man/* /usr/local/share/man
-  style:     cargo fmt --all -- --check
+  release-aarch64:   cargo build --release --target aarch64-apple-darwin
+  release-x86_64:    cargo build --release --target x86_64-apple-darwin
+  build:             cargo build
+  test:              cargo test
+  run-built:         target/debug/shadowenv
+  add-man:           cp -r man/* /usr/local/share/man
+  style:             cargo fmt --all -- --check
