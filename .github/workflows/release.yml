@@ -7,11 +7,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-11, ubuntu-latest]
         target: [x86_64-unknown-linux-gnu, x86_64-apple-darwin, aarch64-apple-darwin]
         exclude:
         # Don't build linux targets on macos
-        - os: macos-latest
+        - os: macos-11
           target: x86_64-unknown-linux-gnu
         # Don't build darwin targets on ubuntu
         - os: ubuntu-latest
