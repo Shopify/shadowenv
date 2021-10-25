@@ -7,7 +7,7 @@ rustPlatform.buildRustPackage rec {
     (lib.findFirst (line: lib.hasPrefix ''version = "'' line) ''version = ""''
       (lib.splitString "\n" (builtins.readFile (./. + "/Cargo.toml")))));
   src = builtins.fetchGit { url = "file://${builtins.toString ./.}"; };
-  cargoSha256 = "18abkffhb3mkxr4jkf4q5chk5fxbl3xg6rzr08aw9q3z316a6bxh";
+  cargoSha256 = "16fxlmsviwi93mj769767bbb2byhkmfkz3gzwwligdjbjzhkhyl2";
   nativeBuildInputs = [ installShellFiles ];
   buildInputs =
     lib.optionals stdenv.isDarwin [ darwin.apple_sdk.frameworks.Security ];
