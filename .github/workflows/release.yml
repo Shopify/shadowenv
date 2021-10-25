@@ -33,5 +33,5 @@ jobs:
     - uses: Shopify/upload-to-release@master
       with:
         name: shadowenv-${{ matrix.target }}
-        path: target/{{ matrix.target }}/release/shadowenv
+        path: target/${{ matrix.target }}/release/shadowenv
         repo-token: ${{ secrets.GITHUB_TOKEN }}
