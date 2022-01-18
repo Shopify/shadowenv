@@ -29,7 +29,7 @@ pub fn find_root(at: PathBuf, relative_component: &str) -> Result<Option<PathBuf
 ///
 /// Note that this function assumes that the dirpath is trusted.
 pub fn load(dirpath: PathBuf) -> Result<Option<Source>, Error> {
-    let mut source = Source::new();
+    let mut source = Source::new(dirpath.parent().unwrap().to_str().unwrap().to_string());
 
     for entry in fs::read_dir(dirpath)? {
         if let Ok(entry) = entry {

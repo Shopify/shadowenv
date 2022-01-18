@@ -13,6 +13,7 @@ const GROUP_SEPARATOR: &'static str = "\x1D";
 
 #[derive(Debug, Clone)]
 pub struct Source {
+    pub dir: String,
     pub files: Vec<SourceFile>,
 }
 
@@ -50,8 +51,11 @@ pub struct Hash {
 struct WrongInputSize;
 
 impl Source {
-    pub fn new() -> Self {
-        Source { files: vec![] }
+    pub fn new(dir: String) -> Self {
+        Source {
+            dir: dir,
+            files: vec![],
+        }
     }
 
     pub fn add_file(&mut self, name: String, contents: String) -> Result<(), Error> {
@@ -67,6 +71,8 @@ impl Source {
             return Ok(0);
         }
         let mut hasher = VarBlake2b::new(8)?;
+        hasher.input(&self.dir);
+        hasher.input(FILE_SEPARATOR);
         for file in self.files.iter() {
             hasher.input(&file.name);
             hasher.input(GROUP_SEPARATOR);
@@ -117,6 +123,7 @@ mod tests {
     impl Arbitrary for Source {
         fn arbitrary(g: &mut Gen) -> Source {
             Source {
+                dir: Arbitrary::arbitrary(g),
                 files: Arbitrary::arbitrary(g),
             }
         }

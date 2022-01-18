@@ -3,7 +3,9 @@ use crate::shadowenv::Shadowenv;
 
 use failure::Fail;
 use ketos::{Error, FromValueRef, Value};
+use std::env;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 pub struct ShadowLang {}
@@ -246,6 +248,8 @@ impl ShadowLang {
 
         let mut files = source.files.clone();
         files.sort();
+        let original_path = env::current_dir();
+        let _ = env::set_current_dir(Path::new(&source.dir));
 
         for source_file in &files {
             let fname = format!("__shadowenv__{}", source_file.name);
@@ -273,6 +277,9 @@ impl ShadowLang {
                 }
                 return Err(err);
             };
+        }
+        if let Ok(dir) = original_path {
+            let _ = env::set_current_dir(dir);
         }
 
         Ok(())
