@@ -4,10 +4,7 @@ function __shadowenv_hook --on-event fish_prompt --on-variable PWD
     set -a flags --force
     set -eg __shadowenv_force_run
   end
-  @SELF@ hook $flags \
-    | while read line
-      eval "$line" 2>/dev/null
-    end
+  @SELF@ hook $flags | source 2>/dev/null
 end
 
 set -g __shadowenv_force_run 1
