@@ -35,7 +35,7 @@ a load order, and leave plenty of space between the entries you create:
 
 We suggest `gitignore`'ing the entire `.shadowenv.d` directory. The directory should be treated as
 a locally-generated artifact and be generated entirely by user tooling. At Shopify, this is done by
-[`dev`](https://devproductivity.io/dev-shopifys-all-purpose-development-tool/index.html).
+`dev`.
 
 This is not the only valid way to go though, you may get some mileage out of committing the files.
 Let us know what you do!
