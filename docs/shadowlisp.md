@@ -33,7 +33,7 @@ snippet that uses more features than most code will have to:
  (env/remove-from-pathlist "PATH" (path-concat rroot "bin"))
  (when-let ((groot (env/get "GEM_ROOT")))
    (env/remove-from-pathlist "PATH" (path-concat groot "bin"))
-   (env/remove-from-pathlist "GEM_PATH" gem-root))
+   (env/remove-from-pathlist "GEM_PATH" groot))
  (when-let ((ghome (env/get "GEM_HOME")))
    (env/remove-from-pathlist "PATH" (path-concat ghome "bin"))
    (env/remove-from-pathlist "GEM_PATH" ghome)))
