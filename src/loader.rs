@@ -11,12 +11,12 @@ pub const DEFAULT_RELATIVE_COMPONENT: &'static str = ".shadowenv.d";
 
 /// Search upwards the filesystem branch starting with `at` and then its ancestors looking
 /// for a file or directory named `relative_component`.
-pub fn find_root(at: PathBuf, relative_component: &str) -> Result<Option<PathBuf>, Error> {
+pub fn find_root(at: &PathBuf, relative_component: &str) -> Result<Option<PathBuf>, Error> {
     for curr in at.ancestors() {
         let dirpath = curr.join(relative_component);
 
         match fs::read_dir(&dirpath) {
-            Ok(_) => return Ok(Some(std::fs::canonicalize(dirpath)?)),
+            Ok(_) => return Ok(Some(fs::canonicalize(dirpath)?)),
             Err(ref e) if e.kind() == ErrorKind::NotFound => (),
             Err(e) => return Err(e.into()),
         }

@@ -114,9 +114,12 @@ pub fn load_env(
 
 /// Load a Source from the current dir, ensuring that it is trusted.
 fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
-    if let Some(root) = loader::find_root(pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)? {
+    if let Some(root) = loader::find_root(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)? {
         if !trust::is_dir_trusted(&root)? {
-            return Err(trust::NotTrusted {}.into());
+            return Err(trust::NotTrusted {
+                not_trusted_dir_path: pathbuf.to_string_lossy().to_string(),
+            }
+            .into());
         }
         return Ok(loader::load(root)?);
     }
@@ -195,4 +198,20 @@ pub fn apply_env(
 
 fn shell_escape(s: &str) -> String {
     shell::escape(Cow::from(s)).to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+    #[test]
+    fn load_trusted_source_returns_an_error_for_untrusted_folders() {
+        let temp_dir = tempdir().unwrap().into_path();
+        let path = temp_dir.to_string_lossy().to_string();
+        fs::create_dir(temp_dir.join(".shadowenv.d")).unwrap();
+        let result = load_trusted_source(temp_dir);
+        assert!(result.is_err());
+        assert_eq!(format!("directory: {} contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
+    }
 }
