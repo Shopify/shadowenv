@@ -82,11 +82,10 @@ impl ShadowLang {
                 let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                let foo = shadowenv
+                Ok(shadowenv
                     .get(name)
-                    .map(|s| <String as Into<Value>>::into(s.to_string()))
-                    .unwrap_or(Value::Unit);
-                Ok(foo)
+                    .map(<String as Into<Value>>::into)
+                    .unwrap_or(Value::Unit))
             })
         });
 
@@ -237,10 +236,10 @@ impl ShadowLang {
             `(let ,assigns (when (not (null ,(first (first assigns)))) ,@body)))
         "#;
 
-        if let Err(err) = interp.run_code(&prelude, None) {
+        if let Err(err) = interp.run_code(prelude, None) {
             interp.display_error(&err);
             if let Some(trace) = interp.get_traceback() {
-                eprintln!("");
+                eprintln!();
                 interp.display_trace(&trace);
             }
             return Err(err);
@@ -259,7 +258,7 @@ impl ShadowLang {
             if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
                 interp.display_error(&err);
                 if let Some(trace) = interp.get_traceback() {
-                    eprintln!("");
+                    eprintln!();
                     interp.display_trace(&trace);
                 }
                 return Err(err);
@@ -272,7 +271,7 @@ impl ShadowLang {
                 // TODO: error type?
                 interp.display_error(&err);
                 if let Some(trace) = interp.get_traceback() {
-                    eprintln!("");
+                    eprintln!();
                     interp.display_trace(&trace);
                 }
                 return Err(err);

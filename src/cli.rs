@@ -12,7 +12,7 @@ pub fn app() -> App<'static, 'static> {
         .into_boxed_str(),
     );
     App::new("shadowenv")
-        .version(&version[..])
+        .version(&*version)
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("hook")

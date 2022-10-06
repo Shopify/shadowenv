@@ -45,17 +45,17 @@ impl Data {
 
     pub fn add_scalar(&mut self, name: String, original: Option<String>, current: Option<String>) {
         self.scalars.push(Scalar {
-            name: name,
-            original: original,
-            current: current,
+            name,
+            original,
+            current,
         })
     }
 
     pub fn add_list(&mut self, name: String, additions: Vec<String>, deletions: Vec<String>) {
         self.lists.push(List {
-            name: name,
-            additions: additions,
-            deletions: deletions,
+            name,
+            additions,
+            deletions,
         })
     }
 }

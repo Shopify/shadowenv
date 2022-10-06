@@ -7,7 +7,6 @@ use crate::shadowenv::Shadowenv;
 use crate::trust;
 use crate::undo;
 use serde_derive::Serialize;
-use serde_json;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -37,11 +36,11 @@ struct Modifications {
 
 impl Modifications {
     fn new(exports: HashMap<String, Option<String>>) -> Modifications {
-        return Modifications {
+        Modifications {
             schema: "v2".to_string(),
             exported: exports,
             unexported: HashMap::new(),
-        };
+        }
     }
 }
 
@@ -65,7 +64,7 @@ pub fn load_env(
     shadowenv_data: String,
     force: bool,
 ) -> Result<Option<(Shadowenv, bool)>, Error> {
-    let mut parts = shadowenv_data.splitn(2, ":");
+    let mut parts = shadowenv_data.splitn(2, ':');
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
 
@@ -98,7 +97,7 @@ pub fn load_env(
 
     let activation = match target {
         Some(target) => {
-            if let Err(_) = ShadowLang::run_program(shadowenv.clone(), target) {
+            if ShadowLang::run_program(shadowenv.clone(), target).is_err() {
                 // no need to return anything descriptive here since we already had ketos print it
                 // to stderr.
                 return Err(lang::ShadowlispError {}.into());
@@ -118,7 +117,7 @@ fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
         if !trust::is_dir_trusted(&root)? {
             return Err(trust::NotTrusted {}.into());
         }
-        return Ok(loader::load(root)?);
+        return loader::load(root);
     }
     Ok(None)
 }
@@ -154,7 +153,7 @@ pub fn apply_env(
                 match v {
                     Some(s) => {
                         if k == "PATH" {
-                            let pathlist = shell_escape(&s).replace(":", "' '");
+                            let pathlist = shell_escape(&s).replace(':', "' '");
                             println!("set -gx {} {}", k, pathlist);
                         } else {
                             println!("set -gx {} {}", k, shell_escape(&s));

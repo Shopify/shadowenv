@@ -8,8 +8,8 @@ use std::result::Result;
 use std::str::FromStr;
 use std::u64;
 
-const FILE_SEPARATOR: &'static str = "\x1C";
-const GROUP_SEPARATOR: &'static str = "\x1D";
+const FILE_SEPARATOR: &str = "\x1C";
+const GROUP_SEPARATOR: &str = "\x1D";
 
 #[derive(Debug, Clone)]
 pub struct Source {
@@ -25,7 +25,7 @@ pub struct SourceFile {
 
 impl Ord for SourceFile {
     fn cmp(&self, other: &Self) -> Ordering {
-        return self.name.cmp(&other.name);
+        self.name.cmp(&other.name)
     }
 }
 
@@ -41,7 +41,7 @@ impl PartialEq for SourceFile {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Hash {
     pub hash: u64,
 }
@@ -52,22 +52,16 @@ struct WrongInputSize;
 
 impl Source {
     pub fn new(dir: String) -> Self {
-        Source {
-            dir: dir,
-            files: vec![],
-        }
+        Source { dir, files: vec![] }
     }
 
     pub fn add_file(&mut self, name: String, contents: String) -> Result<(), Error> {
-        self.files.push(SourceFile {
-            name: name.to_string(),
-            contents: contents.to_string(),
-        });
+        self.files.push(SourceFile { name, contents });
         Ok(())
     }
 
     pub fn hash(&self) -> Result<u64, Error> {
-        if self.files.len() == 0 {
+        if self.files.is_empty() {
             return Ok(0);
         }
         let mut hasher = VarBlake2b::new(8)?;
@@ -94,7 +88,7 @@ impl FromStr for Hash {
         if key.len() != 16 {
             return Err(WrongInputSize {}.into());
         }
-        let hash = u64::from_str_radix(&key, 16)?;
+        let hash = u64::from_str_radix(key, 16)?;
         Ok(Hash { hash })
     }
 }

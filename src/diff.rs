@@ -5,7 +5,7 @@ use std::env;
 
 /// print a diff of the env
 pub fn run(verbose: bool, color: bool, shadowenv_data: String) -> i32 {
-    let mut parts = shadowenv_data.splitn(2, ":");
+    let mut parts = shadowenv_data.splitn(2, ':');
     let _prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
     let shadowenv_data = undo::Data::from_str(json_data).unwrap();
@@ -26,12 +26,12 @@ pub fn run(verbose: bool, color: bool, shadowenv_data: String) -> i32 {
             print_verbose(&name, &value)
         }
     }
-    for (_name, scalar) in &scalars {
-        diff_scalar(&scalar, color)
-    }
-    for (_name, list) in &lists {
-        diff_list(&list, &"".to_string(), color)
-    }
+    scalars
+        .iter()
+        .for_each(|(_name, scalar)| diff_scalar(scalar, color));
+    lists
+        .iter()
+        .for_each(|(_name, list)| diff_list(list, "", color));
     0
 }
 
@@ -39,27 +39,26 @@ fn diff_list(list: &undo::List, current: &str, color: bool) {
     let formatted_deletions: Vec<String> = if color {
         list.deletions
             .iter()
-            .map(|x| "\x1b[48;5;52m".to_string() + &x + &"\x1b[0;91m".to_string())
+            .map(|x| "\x1b[48;5;52m".to_string() + x + "\x1b[0;91m")
             .collect()
     } else {
         list.deletions.clone()
     };
     let mut prefix = formatted_deletions.join(":");
-    let items = current.split(":").collect::<Vec<&str>>();
-    let items = items
-        .into_iter()
+
+    let items = current
+        .split(':')
         .skip_while(|x| list.additions.contains(&x.to_string()));
     let items: Vec<&str> = items.collect();
     let suffix = items.join(":");
-    if suffix != "" && prefix != "" {
+    if !suffix.is_empty() && !prefix.is_empty() {
         prefix += ":";
     }
     diff_remove(&list.name, &(prefix + &suffix), color);
 
-    let items = current.split(":").collect::<Vec<&str>>();
-    let items = items.into_iter().map(|x| {
+    let items = current.split(':').map(|x| {
         if list.additions.contains(&x.to_string()) && color {
-            "\x1b[48;5;22m".to_string() + &x + &("\x1b[0;92m".to_string())
+            "\x1b[48;5;22m".to_string() + x + "\x1b[0;92m"
         } else {
             x.to_string()
         }
@@ -71,10 +70,10 @@ fn diff_list(list: &undo::List, current: &str, color: bool) {
 
 fn diff_scalar(scalar: &undo::Scalar, color: bool) {
     if let Some(value) = &scalar.original {
-        diff_remove(&scalar.name, &value, color);
+        diff_remove(&scalar.name, value, color);
     }
     if let Some(value) = &scalar.current {
-        diff_add(&scalar.name, &value, color);
+        diff_add(&scalar.name, value, color);
     }
 }
 

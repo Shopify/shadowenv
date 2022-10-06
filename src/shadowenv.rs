@@ -7,7 +7,6 @@ use std::env;
 use crate::features::Feature;
 use crate::undo;
 use ketos_derive::{ForeignValue, FromValueRef};
-use serde_json;
 #[derive(Debug, ForeignValue, FromValueRef)]
 pub struct Shadowenv {
     /// the mutated/modified env: the final state we want to be in after eval'ing exports.
@@ -26,9 +25,10 @@ pub struct Shadowenv {
 
 impl Shadowenv {
     pub fn load_shadowenv_data_or_legacy_fallback(fallback_data: Option<String>) -> String {
-        match env::var("__shadowenv_data") {
-            Ok(priority_data) => priority_data,
-            Err(_) => fallback_data.unwrap_or("".to_string()),
+        if let Ok(priority_data) = env::var("__shadowenv_data") {
+            priority_data
+        } else {
+            fallback_data.unwrap_or_else(|| "".to_string())
         }
     }
 
@@ -41,11 +41,11 @@ impl Shadowenv {
 
         Shadowenv {
             env: RefCell::new(unshadowed_env.clone()),
-            unshadowed_env: unshadowed_env,
-            initial_env: env.clone(),
+            unshadowed_env,
+            initial_env: env,
             lists: RefCell::new(HashSet::new()),
             features: RefCell::new(HashSet::new()),
-            target_hash: target_hash,
+            target_hash,
         }
     }
 
@@ -90,11 +90,11 @@ impl Shadowenv {
         for (varname, final_value) in changes {
             if lists.contains(&varname) {
                 let unshadowed_parts: Vec<&str> = match self.unshadowed_env.get(&varname) {
-                    Some(s) => s.split(":").collect(),
+                    Some(s) => s.split(':').collect(),
                     None => vec![],
                 };
                 let final_parts: Vec<&str> = match env.get(&varname) {
-                    Some(s) => s.split(":").collect(),
+                    Some(s) => s.split(':').collect(),
                     None => vec![],
                 };
                 let (additions, deletions) = diff_vecs(unshadowed_parts, final_parts);
@@ -110,7 +110,7 @@ impl Shadowenv {
 
     fn format_shadowenv_data(&self) -> Result<String, Error> {
         let d = self.shadowenv_data();
-        Ok(format!("{:016x}:", self.target_hash).to_string() + &serde_json::to_string(&d)?)
+        Ok(format!("{:016x}:", self.target_hash) + &serde_json::to_string(&d)?)
     }
 
     pub fn exports(&self) -> Result<HashMap<String, Option<String>>, Error> {
@@ -133,7 +133,7 @@ impl Shadowenv {
         Ok(changes)
     }
 
-    pub fn set(&self, a: &str, b: Option<&str>) -> () {
+    pub fn set(&self, a: &str, b: Option<&str>) {
         env_set(
             &mut self.env.borrow_mut(),
             a.to_string(),
@@ -145,12 +145,12 @@ impl Shadowenv {
         env_get(self.env.borrow(), a.to_string())
     }
 
-    pub fn remove_from_pathlist(&self, a: &str, b: &str) -> () {
+    pub fn remove_from_pathlist(&self, a: &str, b: &str) {
         self.inform_list(a);
         env_remove_from_pathlist(&mut self.env.borrow_mut(), a.to_string(), b.to_string())
     }
 
-    pub fn remove_from_pathlist_containing(&self, a: &str, b: &str) -> () {
+    pub fn remove_from_pathlist_containing(&self, a: &str, b: &str) {
         self.inform_list(a);
         env_remove_from_pathlist_containing(
             &mut self.env.borrow_mut(),
@@ -159,17 +159,17 @@ impl Shadowenv {
         )
     }
 
-    pub fn append_to_pathlist(&self, a: &str, b: &str) -> () {
+    pub fn append_to_pathlist(&self, a: &str, b: &str) {
         self.inform_list(a);
         env_append_to_pathlist(&mut self.env.borrow_mut(), a.to_string(), b.to_string())
     }
 
-    pub fn prepend_to_pathlist(&self, a: &str, b: &str) -> () {
+    pub fn prepend_to_pathlist(&self, a: &str, b: &str) {
         self.inform_list(a);
         env_prepend_to_pathlist(&mut self.env.borrow_mut(), a.to_string(), b.to_string())
     }
 
-    pub fn add_feature(&self, name: &str, version: Option<&str>) -> () {
+    pub fn add_feature(&self, name: &str, version: Option<&str>) {
         let feature: Feature = Feature::new(name.to_string(), version.map(|s| s.to_string()));
         self.features.borrow_mut().insert(feature);
     }
@@ -197,7 +197,7 @@ impl Shadowenv {
     }
 }
 
-fn env_set(env: &mut RefMut<HashMap<String, String>>, a: String, b: Option<String>) -> () {
+fn env_set(env: &mut RefMut<HashMap<String, String>>, a: String, b: Option<String>) {
     match b {
         Some(string) => {
             env.insert(a, string);
@@ -209,72 +209,68 @@ fn env_set(env: &mut RefMut<HashMap<String, String>>, a: String, b: Option<Strin
 }
 
 fn env_get(env: Ref<HashMap<String, String>>, a: String) -> Option<String> {
-    env.get(&a).map(|a| a.clone())
+    env.get(&a).cloned()
 }
 
-fn env_remove_from_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) -> () {
+fn env_remove_from_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) {
     let curr = env.get(&a);
     let mut items = match curr {
-        Some(existing) => existing.split(":").collect::<Vec<&str>>(),
+        Some(existing) => existing.split(':').collect::<Vec<&str>>(),
         None => vec![],
     };
 
     if let Some(index) = items.iter().position(|x| *x == b) {
         items.remove(index);
-        if items.len() == 0 {
+        if items.is_empty() {
             env.remove(&a);
         } else {
             let next = items.join(":");
-            env.insert(a, next.to_string());
+            env.insert(a, next);
         }
     }
-    ()
 }
 
 fn env_remove_from_pathlist_containing(
     env: &mut RefMut<HashMap<String, String>>,
     a: String,
     b: String,
-) -> () {
+) {
     let curr = env.get(&a);
     let items = match curr {
-        Some(existing) => existing.split(":").collect::<Vec<&str>>(),
+        Some(existing) => existing.split(':').collect::<Vec<&str>>(),
         None => vec![],
     };
 
     let items = items.into_iter().skip_while(|x| (*x).contains(&b));
     let items: Vec<&str> = items.collect();
-    if items.len() == 0 {
+    if items.is_empty() {
         env.remove(&a);
     } else {
         let next = items.join(":");
-        env.insert(a, next.to_string());
+        env.insert(a, next);
     }
-    ()
 }
 
-fn env_append_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) -> () {
+fn env_append_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) {
     let curr = env.get(&a);
     let mut items = match curr {
-        Some(existing) => existing.split(":").collect::<Vec<&str>>(),
+        Some(existing) => existing.split(':').collect::<Vec<&str>>(),
         None => vec![],
     };
     items.insert(items.len(), &b);
     let next = items.join(":");
-    env.insert(a, next.to_string());
-    ()
+    env.insert(a, next);
 }
 
-fn env_prepend_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) -> () {
+fn env_prepend_to_pathlist(env: &mut RefMut<HashMap<String, String>>, a: String, b: String) {
     let curr = env.get(&a);
     let mut items = match curr {
-        Some(existing) => existing.split(":").collect::<Vec<&str>>(),
+        Some(existing) => existing.split(':').collect::<Vec<&str>>(),
         None => vec![],
     };
     items.insert(0, &b);
     let next = items.join(":");
-    env.insert(a, next.to_string());
-    ()
+    env.insert(a, next);
 }
 
 fn diff_vecs(oldvec: Vec<&str>, newvec: Vec<&str>) -> (Vec<String>, Vec<String>) {

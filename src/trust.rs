@@ -21,7 +21,7 @@ pub struct NoShadowenv;
 )]
 pub struct NotTrusted;
 
-pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
+pub fn is_dir_trusted(dir: &Path) -> Result<bool, Error> {
     let signer = load_or_generate_signer().unwrap();
 
     let root = match loader::find_root(dir.to_path_buf(), loader::DEFAULT_RELATIVE_COMPONENT)? {
@@ -74,7 +74,7 @@ fn load_or_generate_signer() -> Result<Keypair, Error> {
                 Ok(f) => f,
             };
 
-            file.write(&seed.to_bytes())?;
+            file.write_all(&seed.to_bytes())?;
 
             Ok(seed)
         }
@@ -145,6 +145,6 @@ fn write_gitignore(root: PathBuf) -> Result<(), Error> {
     Ok(())
 }
 
-fn trust_file(root: &PathBuf, fingerprint: String) -> PathBuf {
+fn trust_file(root: &Path, fingerprint: String) -> PathBuf {
     root.join(format!(".trust-{}", fingerprint))
 }
