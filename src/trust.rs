@@ -17,7 +17,7 @@ pub struct NoShadowenv;
 
 #[derive(Fail, Debug)]
 #[fail(
-    display = "directory: {} contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
+    display = "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
     not_trusted_dir_path
 )]
 pub struct NotTrusted {

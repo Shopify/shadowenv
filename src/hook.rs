@@ -212,6 +212,6 @@ mod tests {
         fs::create_dir(temp_dir.join(".shadowenv.d")).unwrap();
         let result = load_trusted_source(temp_dir);
         assert!(result.is_err());
-        assert_eq!(format!("directory: {} contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
+        assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
     }
 }
