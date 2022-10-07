@@ -17,14 +17,17 @@ pub struct NoShadowenv;
 
 #[derive(Fail, Debug)]
 #[fail(
-    display = "directory contains untrusted shadowenv program: `shadowenv help trust` to learn more."
+    display = "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
+    not_trusted_dir_path
 )]
-pub struct NotTrusted;
+pub struct NotTrusted {
+    pub not_trusted_dir_path: String,
+}
 
 pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let root = match loader::find_root(dir.to_path_buf(), loader::DEFAULT_RELATIVE_COMPONENT)? {
+    let root = match loader::find_root(&dir.to_path_buf(), loader::DEFAULT_RELATIVE_COMPONENT)? {
         None => return Err(NoShadowenv {}.into()),
         Some(r) => r,
     };
@@ -52,7 +55,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
 }
 
 fn load_or_generate_signer() -> Result<Keypair, Error> {
-    let path = format!("{}/.config/shadowenv/trust-key-v2", std::env::var("HOME")?);
+    let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME")?);
 
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(&path)) {
         Ok(bytes) => Ok(Some(bytes)),
@@ -67,7 +70,7 @@ fn load_or_generate_signer() -> Result<Keypair, Error> {
         None => {
             let mut csprng = OsRng {};
             let seed = Keypair::generate(&mut csprng);
-            std::fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
+            fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
             let mut file = match File::create(OsString::from(&path)) {
                 // TODO: error type
                 Err(why) => panic!("couldn''t write to {}: {}", path, why),
@@ -85,7 +88,7 @@ fn load_or_generate_signer() -> Result<Keypair, Error> {
 pub fn run() -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let root = match loader::find_root(env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)? {
+    let root = match loader::find_root(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)? {
         None => return Err(NoShadowenv {}.into()),
         Some(r) => r,
     };
