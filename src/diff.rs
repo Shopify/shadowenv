@@ -148,32 +148,22 @@ mod tests {
     fn nominal_test() {
         let mut logger = DummyLogger::default();
 
-        let env_vars = vec![(
-            "MANPATH".to_string(),
-            "/opt/homebrew/share/man:/opt/homebrew/share/man".to_string(),
-        )];
+        let env_vars = vec![
+            ("VAR_A".to_string(), "/added:/existent".to_string()),
+            ("VAR_B".to_string(), "/added".to_string()),
+            ("VAR_C".to_string(), "/added:/existent".to_string()),
+        ];
 
-        let data = r#"8a3f0f24bc3fd12d:{"scalars":[{"name":"REDIS_URL","original":null,"current":"redis://web.railgun:6379/0"},{"name":"CPPFLAGS","original":null,"current":"-DPNG_ARM_NEON_OPT=0"},{"name":"NVM_BIN","original":null,"current":"/Users/xade/.nvm/versions/node/v16.14.2/bin"},{"name":"NVM_PATH","original":null,"current":"/Users/xade/.nvm/versions/node/v16.14.2/lib/node"},{"name":"NVM_DIR","original":null,"current":"/Users/xade/.nvm"},{"name":"NGINX_HOST","original":null,"current":"web.railgun"},{"name":"HOST_BIND_IP","original":null,"current":"192.168.64.1"},{"name":"REDIS_PORT","original":null,"current":"6379"},{"name":"REDIS_HOST","original":null,"current":"web.railgun"},{"name":"NGINX_PORT","original":null,"current":"80"},{"name":"HOST_WEBPACK_IP","original":null,"current":"192.168.64.254"}],"lists":[{"name":"MANPATH","additions":["/Users/xade/.nvm/versions/node/v16.14.2/share/man"],"deletions":[]},{"name":"PATH","additions":["/opt/homebrew/Caskroom/google-cloud-sdk/latest/google-cloud-sdk/bin","/Users/xade/.dev/yarn/1.22.15/bin","/Users/xade/.nvm/versions/node/v16.14.2/bin","/opt/homebrew/opt/python@3.10/bin"],"deletions":[]},{"name":"PKG_CONFIG_PATH","additions":["/opt/homebrew/lib/pkgconfig","/opt/homebrew/opt/zstd/lib/pkgconfig","/opt/homebrew/opt/xz/lib/pkgconfig","/opt/homebrew/opt/sqlite/lib/pkgconfig","/opt/homebrew/opt/readline/lib/pkgconfig","/opt/homebrew/opt/python@3.10/lib/pkgconfig","/opt/homebrew/opt/pcre2/lib/pkgconfig","/opt/homebrew/opt/openssl@1.1/lib/pkgconfig","/opt/homebrew/opt/lz4/lib/pkgconfig","/opt/homebrew/opt/libsodium/lib/pkgconfig","/opt/homebrew/opt/libevent/lib/pkgconfig","/opt/homebrew/opt/icu4c/lib/pkgconfig","/opt/homebrew/opt/glog/lib/pkgconfig","/opt/homebrew/opt/gflags/lib/pkgconfig","/opt/homebrew/opt/folly/lib/pkgconfig","/opt/homebrew/opt/fmt/lib/pkgconfig","/usr/lib/pkgconfig"],"deletions":[]}]}"#;
-        let result = run_with_logger(&mut logger, env_vars, true, false, data.to_string());
+        let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_C","additions":["/added"],"deletions":["/removed"]},{"name":"VAR_B","additions":["/added"],"deletions":[]},{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
+        let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
 
         let expected: Vec<_> = vec![
-            "- MANPATH=/opt/homebrew/share/man:/opt/homebrew/share/man",
-            "+ MANPATH=/opt/homebrew/share/man:/opt/homebrew/share/man",
-            "+ CPPFLAGS=-DPNG_ARM_NEON_OPT=0",
-            "+ HOST_BIND_IP=192.168.64.1",
-            "+ HOST_WEBPACK_IP=192.168.64.254",
-            "+ NGINX_HOST=web.railgun",
-            "+ NGINX_PORT=80",
-            "+ NVM_BIN=/Users/xade/.nvm/versions/node/v16.14.2/bin",
-            "+ NVM_DIR=/Users/xade/.nvm",
-            "+ NVM_PATH=/Users/xade/.nvm/versions/node/v16.14.2/lib/node",
-            "+ REDIS_HOST=web.railgun",
-            "+ REDIS_PORT=6379",
-            "+ REDIS_URL=redis://web.railgun:6379/0",
-            "- PATH=",
-            "+ PATH=",
-            "- PKG_CONFIG_PATH=",
-            "+ PKG_CONFIG_PATH=",
+            "- VAR_A=/existent",
+            "+ VAR_A=/added:/existent",
+            "- VAR_B=",
+            "+ VAR_B=/added",
+            "- VAR_C=/removed:/existent",
+            "+ VAR_C=/added:/existent",
         ]
         .iter()
         .map(ToString::to_string)
