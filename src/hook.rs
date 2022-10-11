@@ -1,22 +1,20 @@
 use crate::hash::{Hash, Source};
 use crate::lang;
-use crate::lang::ShadowLang;
 use crate::loader;
 use crate::output;
 use crate::shadowenv::Shadowenv;
 use crate::trust;
 use crate::undo;
 use serde_derive::Serialize;
-use serde_json;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::result::Result;
 use std::str::FromStr;
 
+use crate::lang::ShadowLang;
 use failure::Error;
 use shell_escape as shell;
 
@@ -94,22 +92,19 @@ pub fn load_env(
     };
 
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Rc::new(Shadowenv::new(env::vars().collect(), data, target_hash));
+    let shadowenv = Shadowenv::new(env::vars().collect(), data, target_hash);
 
-    let activation = match target {
+    match target {
         Some(target) => {
-            if let Err(_) = ShadowLang::run_program(shadowenv.clone(), target) {
-                // no need to return anything descriptive here since we already had ketos print it
-                // to stderr.
-                return Err(lang::ShadowlispError {}.into());
+            match ShadowLang::run_program(shadowenv, target) {
+                // no need to return anything descriptive here since we already
+                // had ketos print it to stderr.
+                Err(_) => Err(lang::ShadowlispError {}.into()),
+                Ok(shadowenv) => Ok(Some((shadowenv, true))),
             }
-            true
         }
-        None => false,
-    };
-
-    let shadowenv = Rc::try_unwrap(shadowenv).unwrap();
-    Ok(Some((shadowenv, activation)))
+        None => Ok(Some((shadowenv, false))),
+    }
 }
 
 /// Load a Source from the current dir, ensuring that it is trusted.

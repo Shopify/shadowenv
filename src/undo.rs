@@ -2,7 +2,7 @@ use std::result::Result;
 
 use failure::Error;
 use serde_derive::{Deserialize, Serialize};
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Scalar {
     #[serde(default)]
     pub name: String,
@@ -12,7 +12,7 @@ pub struct Scalar {
     pub current: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct List {
     #[serde(default)]
     pub name: String,
@@ -22,7 +22,7 @@ pub struct List {
     pub deletions: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Data {
     #[serde(default)]
     pub scalars: Vec<Scalar>,
@@ -45,17 +45,17 @@ impl Data {
 
     pub fn add_scalar(&mut self, name: String, original: Option<String>, current: Option<String>) {
         self.scalars.push(Scalar {
-            name: name,
-            original: original,
-            current: current,
+            name,
+            original,
+            current,
         })
     }
 
     pub fn add_list(&mut self, name: String, additions: Vec<String>, deletions: Vec<String>) {
         self.lists.push(List {
-            name: name,
-            additions: additions,
-            deletions: deletions,
+            name,
+            additions,
+            deletions,
         })
     }
 }

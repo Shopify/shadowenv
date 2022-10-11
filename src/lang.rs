@@ -1,13 +1,16 @@
 use crate::hash::Source;
 use crate::shadowenv::Shadowenv;
+use ketos_derive::{ForeignValue, FromValueRef};
 
 use failure::Fail;
-use ketos::{Error, FromValueRef, Value};
+use ketos::{Context, Error, FromValueRef, Name, Value};
+use std::cell::{Ref, RefCell};
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
+
 pub struct ShadowLang {}
 
 #[derive(Fail, Debug)]
@@ -26,15 +29,6 @@ macro_rules! ketos_fn2 {
     };
 }
 
-fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
-    let res = vals.iter().fold(
-        PathBuf::new(),
-        |acc, v| acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()), // TODO(burke): don't unwrap
-    );
-
-    Ok(res.to_string_lossy().to_string())
-}
-
 macro_rules! assert_args {
     ( $args:expr , $count:expr , $name:expr ) => {
         if $args.len() != $count {
@@ -47,8 +41,52 @@ macro_rules! assert_args {
     };
 }
 
+#[derive(Debug, ForeignValue, FromValueRef)]
+// Sharing a value with Ketos means we can only access it through `&self`.
+// Mutation of values is possible through internally mutable containers,
+// such as `Cell` and `RefCell`.
+struct ShadowenvWrapper(RefCell<Shadowenv>);
+
+impl ShadowenvWrapper {
+    fn new(shadowenv: Shadowenv) -> Self {
+        Self(RefCell::new(shadowenv))
+    }
+    fn borrow_mut_env(&self) -> std::cell::RefMut<Shadowenv> {
+        self.0.borrow_mut()
+    }
+    fn borrow_env(&self) -> Ref<'_, Shadowenv> {
+        self.0.borrow()
+    }
+
+    fn into_inner(self) -> Shadowenv {
+        self.0.into_inner()
+    }
+}
+
+fn get_value(ctx: &Context, shadowenv_name: Name) -> Value {
+    ctx.scope()
+        .get_constant(shadowenv_name)
+        .expect("bug: shadowenv not defined")
+}
+
+fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
+    let res = vals.iter().fold(
+        PathBuf::new(),
+        |acc, v| acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()), // TODO(burke): don't unwrap
+    );
+
+    Ok(res.to_string_lossy().to_string())
+}
+
 impl ShadowLang {
-    pub fn run_program(shadowenv: Rc<Shadowenv>, source: Source) -> Result<(), Error> {
+    pub fn run_program(shadowenv: Shadowenv, source: Source) -> Result<Shadowenv, Error> {
+        let wrapper = Rc::new(ShadowenvWrapper::new(shadowenv));
+        Self::run(&wrapper, source)?;
+        let result = Rc::try_unwrap(wrapper).unwrap().into_inner();
+        Ok(result)
+    }
+
+    fn run(rc_wrapper: &Rc<ShadowenvWrapper>, source: Source) -> Result<(), Error> {
         let mut restrictions = ketos::RestrictConfig::strict();
         // "Maximum size of value stack, in values"
         // This also puts a cap on the size of string literals in a single function invocation.
@@ -64,9 +102,10 @@ impl ShadowLang {
             .finish();
 
         let shadowenv_name = interp.scope().add_name("shadowenv");
+
         interp
             .scope()
-            .add_constant(shadowenv_name, Value::Foreign(shadowenv.clone()));
+            .add_constant(shadowenv_name, Value::Foreign(rc_wrapper.clone()));
 
         ketos_fn2! { interp.scope() => "path-concat" =>
         fn path_concat(...) -> String }
@@ -75,18 +114,16 @@ impl ShadowLang {
             Value::new_foreign_fn(name, move |ctx, args| {
                 assert_args!(args, 1, name);
 
-                let value = ctx
-                    .scope()
-                    .get_constant(shadowenv_name)
-                    .expect("bug: shadowenv not defined");
-                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let value = get_value(ctx, shadowenv_name);
+                let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                let foo = shadowenv
+                let result = wrapper
+                    .borrow_env()
                     .get(name)
-                    .map(|s| <String as Into<Value>>::into(s.to_string()))
+                    .map(<String as Into<Value>>::into)
                     .unwrap_or(Value::Unit);
-                Ok(foo)
+                Ok(result)
             })
         });
 
@@ -94,15 +131,12 @@ impl ShadowLang {
             Value::new_foreign_fn(name, move |ctx, args| {
                 assert_args!(args, 2, name);
 
-                let value = ctx
-                    .scope()
-                    .get_constant(shadowenv_name)
-                    .expect("bug: shadowenv not defined");
-                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let value = get_value(ctx, shadowenv_name);
+                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let value = <&str as FromValueRef>::from_value_ref(&args[1]).ok();
 
-                shadowenv.set(name, value);
+                shadowenv.borrow_mut_env().set(name, value);
                 Ok(Value::Unit)
             })
         });
@@ -113,15 +147,12 @@ impl ShadowLang {
                 Value::new_foreign_fn(name, move |ctx, args| {
                     assert_args!(args, 2, name);
 
-                    let value = ctx
-                        .scope()
-                        .get_constant(shadowenv_name)
-                        .expect("bug: shadowenv not defined");
-                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let value = get_value(ctx, shadowenv_name);
+                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    shadowenv.append_to_pathlist(name, value);
+                    wrapper.borrow_mut_env().append_to_pathlist(name, value);
                     Ok(Value::Unit)
                 })
             });
@@ -132,15 +163,12 @@ impl ShadowLang {
                 Value::new_foreign_fn(name, move |ctx, args| {
                     assert_args!(args, 2, name);
 
-                    let value = ctx
-                        .scope()
-                        .get_constant(shadowenv_name)
-                        .expect("bug: shadowenv not defined");
-                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let value = get_value(ctx, shadowenv_name);
+                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    shadowenv.prepend_to_pathlist(name, value);
+                    wrapper.borrow_mut_env().prepend_to_pathlist(name, value);
                     Ok(Value::Unit)
                 })
             });
@@ -151,15 +179,12 @@ impl ShadowLang {
                 Value::new_foreign_fn(name, move |ctx, args| {
                     assert_args!(args, 2, name);
 
-                    let value = ctx
-                        .scope()
-                        .get_constant(shadowenv_name)
-                        .expect("bug: shadowenv not defined");
-                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let value = get_value(ctx, shadowenv_name);
+                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    shadowenv.remove_from_pathlist(name, value);
+                    wrapper.borrow_mut_env().remove_from_pathlist(name, value);
                     Ok(Value::Unit)
                 })
             });
@@ -170,26 +195,22 @@ impl ShadowLang {
                 Value::new_foreign_fn(name, move |ctx, args| {
                     assert_args!(args, 2, name);
 
-                    let value = ctx
-                        .scope()
-                        .get_constant(shadowenv_name)
-                        .expect("bug: shadowenv not defined");
-                    let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                    let value = get_value(ctx, shadowenv_name);
+                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    shadowenv.remove_from_pathlist_containing(name, value);
+                    wrapper
+                        .borrow_mut_env()
+                        .remove_from_pathlist_containing(name, value);
                     Ok(Value::Unit)
                 })
             });
 
         interp.scope().add_value_with_name("provide", |name| {
             Value::new_foreign_fn(name, move |ctx, args| {
-                let value = ctx
-                    .scope()
-                    .get_constant(shadowenv_name)
-                    .expect("bug: shadowenv not defined");
-                let shadowenv = <&Shadowenv as FromValueRef>::from_value_ref(&value)?;
+                let value = get_value(ctx, shadowenv_name);
+                let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
 
                 let version = match args.len() {
                     1 => None,
@@ -199,12 +220,12 @@ impl ShadowLang {
                             name: Some(name),
                             expected: ketos::function::Arity::Range(1, 2),
                             found: args.len() as u32,
-                        }))
+                        }));
                     }
                 };
                 let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                shadowenv.add_feature(feature, version);
+                wrapper.borrow_mut_env().add_feature(feature, version);
                 Ok(Value::Unit)
             })
         });
@@ -221,7 +242,7 @@ impl ShadowLang {
                             err: e,
                             path: PathBuf::from(path),
                             mode: ketos::io::IoMode::Read,
-                        }))
+                        }));
                     }
                 };
                 Ok(<String as Into<Value>>::into(
@@ -237,10 +258,10 @@ impl ShadowLang {
             `(let ,assigns (when (not (null ,(first (first assigns)))) ,@body)))
         "#;
 
-        if let Err(err) = interp.run_code(&prelude, None) {
+        if let Err(err) = interp.run_code(prelude, None) {
             interp.display_error(&err);
             if let Some(trace) = interp.get_traceback() {
-                eprintln!("");
+                eprintln!();
                 interp.display_trace(&trace);
             }
             return Err(err);
@@ -259,7 +280,7 @@ impl ShadowLang {
             if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
                 interp.display_error(&err);
                 if let Some(trace) = interp.get_traceback() {
-                    eprintln!("");
+                    eprintln!();
                     interp.display_trace(&trace);
                 }
                 return Err(err);
@@ -268,11 +289,11 @@ impl ShadowLang {
 
         for source_file in &files {
             let fname = format!("__shadowenv__{}", source_file.name);
-            if let Err(err) = interp.call(&fname, vec![Value::Foreign(shadowenv.clone())]) {
+            if let Err(err) = interp.call(&fname, vec![Value::Foreign(rc_wrapper.clone())]) {
                 // TODO: error type?
                 interp.display_error(&err);
                 if let Some(trace) = interp.get_traceback() {
-                    eprintln!("");
+                    eprintln!();
                     interp.display_trace(&trace);
                 }
                 return Err(err);
@@ -281,7 +302,126 @@ impl ShadowLang {
         if let Ok(dir) = original_path {
             let _ = env::set_current_dir(dir);
         }
-
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::features::Feature;
+    use crate::hash::SourceFile;
+    use crate::undo::Data;
+    use std::collections::{HashMap, HashSet};
+
+    fn build_source(content: &str) -> Source {
+        Source {
+            dir: "dir".to_string(),
+            files: vec![SourceFile {
+                name: "file.lisp".to_string(),
+                contents: content.to_string(),
+            }],
+        }
+    }
+
+    fn build_shadow_env(env_variables: Vec<(&str, &str)>) -> Shadowenv {
+        let env = env_variables
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect::<HashMap<_, _>>();
+        Shadowenv::new(env, Data::new(), 0)
+    }
+
+    #[test]
+    fn test_env_manipulation() {
+        let shadowenv = build_shadow_env(vec![]);
+
+        let source = build_source(
+            r#"
+            (env/set "VAL_A" "42")
+            "#,
+        );
+
+        let result = ShadowLang::run_program(shadowenv, source);
+        let env = result.unwrap().exports().unwrap();
+
+        assert_eq!(env["VAL_A"].as_ref().unwrap(), "42");
+    }
+
+    #[test]
+    fn test_pathlist_manipulation() {
+        let shadowenv = build_shadow_env(vec![
+            ("PATH_A", "/path1:/path2"),
+            ("PATH_B", "/path3"),
+            ("PATH_C", "/will_be_removed_path:/path5"),
+        ]);
+
+        let source = build_source(
+            r#"
+                (env/prepend-to-pathlist "PATH_A" "/path3")
+                (env/prepend-to-pathlist "PATH_B" "/path7")
+                (env/remove-from-pathlist-containing "PATH_C" "/will_be_removed_path")
+                (env/prepend-to-pathlist "PATH_C" "/will_be_added_path")
+            "#,
+        );
+
+        let result = ShadowLang::run_program(shadowenv, source);
+        let env = result.unwrap().exports().unwrap();
+
+        assert_eq!(env["PATH_A"].as_ref().unwrap(), "/path3:/path1:/path2");
+        assert_eq!(env["PATH_B"].as_ref().unwrap(), "/path7:/path3");
+        assert_eq!(
+            env["PATH_C"].as_ref().unwrap(),
+            "/will_be_added_path:/path5"
+        );
+    }
+
+    #[test]
+    fn test_set_variables() {
+        let shadowenv = build_shadow_env(vec![
+            ("GEM_HOME", "/gem_home"),
+            ("PATH", "/gem_home/bin:/something_else"),
+        ]);
+
+        let source = build_source(
+            r#"
+                (when-let ((gem-home (env/get "GEM_HOME")))
+                (env/remove-from-pathlist "PATH" (path-concat gem-home "bin")))
+            "#,
+        );
+
+        let result = ShadowLang::run_program(shadowenv, source);
+        let env = result.unwrap().exports().unwrap();
+
+        assert_eq!(env["PATH"].as_ref().unwrap(), "/something_else");
+    }
+
+    #[test]
+    fn test_features() {
+        let shadowenv = build_shadow_env(vec![]);
+
+        let source = build_source(
+            r#"
+                (provide "ruby" "3.1.2")
+            "#,
+        );
+
+        let shadowenv = ShadowLang::run_program(shadowenv, source).unwrap();
+        let expected = HashSet::from([Feature::new("ruby".to_string(), Some("3.1.2".to_string()))]);
+        assert_eq!(shadowenv.features(), expected);
+    }
+
+    #[test]
+    fn test_expand_path() {
+        let shadowenv = build_shadow_env(vec![]);
+
+        let source = build_source(
+            r#"
+                (env/set "EXPANDED" (expand-path "~"))
+            "#,
+        );
+        let home = dirs::home_dir().map(|p| p.into_os_string().into_string().unwrap());
+        let shadowenv = ShadowLang::run_program(shadowenv, source).unwrap();
+        assert_eq!(shadowenv.get("EXPANDED"), home);
     }
 }
