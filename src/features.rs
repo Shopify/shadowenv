@@ -8,18 +8,7 @@ pub struct Feature {
 
 impl Feature {
     pub fn new(name: String, version: Option<String>) -> Self {
-        Feature {
-            name: name,
-            version: version,
-        }
-    }
-
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    pub fn version(&self) -> &Option<String> {
-        &self.version
+        Feature { name, version }
     }
 }
 
