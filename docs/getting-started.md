@@ -67,13 +67,14 @@ cp target/release/shadowenv /usr/local/bin/shadowenv
 </div>
 
 Shadowenv relies on a shell hook to make changes when you change directories. In order to use it,
-add a line to your shell profile (`.zshrc`, `.bash_profile`, or `config.fish`) reading:
+add a line to your shell profile (`.zshrc`, `.bash_profile`, `config.fish`, or `.xonshrc`) reading:
 
 ```bash
 # (only add one of these!)
-eval "$(shadowenv init bash)" # for bash
-eval "$(shadowenv init zsh)"  # for zsh
-shadowenv init fish | source  # for fish
+eval "$(shadowenv init bash)"  # for bash
+eval "$(shadowenv init zsh)"   # for zsh
+shadowenv init fish | source   # for fish
+execx($(shadowenv init xonsh)) # for xonsh
 ```
 
 Make sure to restart your shell after adding this.

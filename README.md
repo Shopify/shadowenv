@@ -6,13 +6,14 @@ some limited ability to make the manipulations dynamic.
 
 ![shadowenv in action](https://burkelibbey.s3.amazonaws.com/shadowenv.gif)
 
-In order to use shadowenv, add a line to your shell profile (`.zshrc`, `.bash_profile`, or
-`config.fish`) reading:
+In order to use shadowenv, add a line to your shell profile (`.zshrc`, `.bash_profile`,
+`config.fish`, or `.xonshrc`) reading:
 
 ```bash
-eval "$(shadowenv init bash)" # for bash
-eval "$(shadowenv init zsh)"  # for zsh
-shadowenv init fish | source  # for fish
+eval "$(shadowenv init bash)"  # for bash
+eval "$(shadowenv init zsh)"   # for zsh
+shadowenv init fish | source   # for fish
+execx($(shadowenv init xonsh)) # for xonsh
 ```
 
 With this code loaded, upon entering a directory containing a `.shadowenv.d` directory,
