@@ -1,20 +1,7 @@
-import json
-
-def __shadowenv() -> None:
-    shadow_data = $(@SELF@ hook --json)
-    if shadow_data:
-        envs = json.loads(shadow_data)
-        for shadow_key in ["exported", "unexported"]:
-            for k,v in envs.get(shadow_key, {}).items():
-                if v is None:
-                    del ${k}
-                else:
-                    ${k} = v
-
 @events.on_post_rc
 def __shadowenv_post_rc() -> None:
-    __shadowenv()
+    execx($(@SELF@ hook --xonsh))
 
 @events.on_chdir
 def __shadowenv_chdir(olddir: str, newdir: str) -> None:
-    __shadowenv()
+    execx($(@SELF@ hook --xonsh))

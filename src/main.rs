@@ -36,6 +36,7 @@ fn main() {
             let mode = match true {
                 true if matches.is_present("porcelain") => VariableOutputMode::PorcelainMode,
                 true if matches.is_present("fish") => VariableOutputMode::FishMode,
+                true if matches.is_present("xonsh") => VariableOutputMode::XonshMode,
                 true if matches.is_present("json") => VariableOutputMode::JsonMode,
                 true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJsonMode,
                 _ => VariableOutputMode::PosixMode,

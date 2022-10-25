@@ -29,6 +29,11 @@ pub fn app() -> App<'static, 'static> {
                         .help("Format variable assignments for fish shell"),
                 )
                 .arg(
+                    Arg::with_name("xonsh")
+                        .long("xonsh")
+                        .help("Format variable assignments for xonsh shell"),
+                )
+                .arg(
                     Arg::with_name("posix")
                         .long("posix")
                         .help("Format variable assignments for posix shells (default)"),
@@ -66,7 +71,7 @@ pub fn app() -> App<'static, 'static> {
                         .long("pretty-json")
                         .help("Format variable assignments as pretty JSON"),
                 )
-                .group(ArgGroup::with_name("format").args(&["porcelain", "posix", "fish", "json", "pretty-json"])),
+                .group(ArgGroup::with_name("format").args(&["porcelain", "posix", "fish", "xonsh", "json", "pretty-json"])),
         )
         .subcommand(
             SubCommand::with_name("diff")

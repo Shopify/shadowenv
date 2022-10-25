@@ -24,6 +24,7 @@ pub enum VariableOutputMode {
     PosixMode,
     JsonMode,
     PrettyJsonMode,
+    XonshMode,
 }
 
 #[derive(Serialize, Debug)]
@@ -164,6 +165,14 @@ pub fn apply_env(
                 }
             }
             output::print_activation_to_tty(activation, shadowenv.features());
+        }
+        VariableOutputMode::XonshMode => {
+            for (k, v) in shadowenv.exports()? {
+                match v {
+                    Some(s) => println!(r#"${} = "{}""#, k, s.replace(r#"""#, r#"\""#)),
+                    None => println!("del ${}", k),
+                }
+            }
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>
