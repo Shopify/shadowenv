@@ -169,7 +169,7 @@ pub fn apply_env(
         VariableOutputMode::XonshMode => {
             for (k, v) in shadowenv.exports()? {
                 match v {
-                    Some(s) => println!(r#"${} = "{}""#, k, s.replace(r#"""#, r#"\""#)),
+                    Some(s) => println!(r#"${} = "{}""#, k, s.escape_default()),
                     None => println!("del ${}", k),
                 }
             }
