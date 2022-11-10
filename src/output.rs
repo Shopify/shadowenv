@@ -2,7 +2,7 @@ use crate::features::Feature;
 use crate::loader;
 use crate::trust;
 
-use atty::{isnt, Stream};
+use atty::{is, Stream};
 use failure::{format_err, Error};
 use regex::Regex;
 use std::collections::HashSet;
@@ -38,7 +38,7 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
 }
 
 pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
-    if isnt(Stream::Stderr) {
+    if !should_print_activation() {
         return;
     }
     if activated {
@@ -140,4 +140,13 @@ fn create_cooldown_sentinel(path: PathBuf) -> Result<(), Error> {
         .create(true)
         .open(path)?;
     Ok(())
+}
+
+fn should_print_activation() -> bool {
+    let configured_to_print: bool;
+    match env::var("SHADOWENV_SILENT") {
+        Ok(_) => configured_to_print = false,
+        Err(_) => configured_to_print = true,
+    };
+    return is(Stream::Stderr) && configured_to_print;
 }
