@@ -145,7 +145,10 @@ fn create_cooldown_sentinel(path: PathBuf) -> Result<(), Error> {
 fn should_print_activation() -> bool {
     let configured_to_print: bool;
     match env::var("SHADOWENV_SILENT") {
-        Ok(_) => configured_to_print = false,
+        Ok(value) => match value.to_lowercase().as_str() {
+            "0" | "false" | "no" | "" => configured_to_print = true,
+            _ => configured_to_print = false,
+        },
         Err(_) => configured_to_print = true,
     };
     return is(Stream::Stderr) && configured_to_print;
