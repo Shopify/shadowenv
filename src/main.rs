@@ -1,3 +1,4 @@
+mod changes;
 mod cli;
 mod diff;
 mod execcmd;
@@ -82,6 +83,19 @@ fn main() {
         ("init", Some(matches)) => {
             let shellname = matches.subcommand_name().unwrap();
             process::exit(init::run(shellname));
+        }
+        ("changes", Some(matches)) => {
+            let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
+            let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
+            match changes::run(data) {
+                Err(err) => {
+                    eprintln!("{}", err);
+                    process::exit(1);
+                }
+                Ok(changes) => {
+                    print!("{}", changes);
+                }
+            }
         }
         _ => {
             panic!("subcommand was required by config but somehow none was provided");
