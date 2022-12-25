@@ -54,7 +54,7 @@ impl<'out> Logger<'out> for OutputLogger<'out> {
         }
     }
     fn print(&mut self, value: String) {
-        write!(self.output, "{}", value);
+        write!(self.output, "{}", value).expect("Could not print to output!");
     }
 
     fn pre_decoration(&self, change: Option<&ChangeType>) -> &str {
@@ -68,7 +68,7 @@ impl<'out> Logger<'out> for OutputLogger<'out> {
         }
     }
 
-    fn post_decoration(&self, change: Option<&ChangeType>) -> &str {
+    fn post_decoration(&self, _change: Option<&ChangeType>) -> &str {
         if self.color {
             // Clearing to EOL with \x1b[K prevents a weird issue where a wrapped line uses the last
             // non-null background color for the newline character, filling the rest of the space in the
@@ -223,12 +223,12 @@ mod tests {
         let result = run_with_logger(&mut logger, env_vars, false, data.to_string());
 
         let expected: String = vec![
-            "- VAR_A=/existent",
-            "+ VAR_A=/added:/existent",
-            "- VAR_B=",
-            "+ VAR_B=/added",
-            "- VAR_C=/removed:/existent",
-            "+ VAR_C=/added:/existent",
+            "\x1b[91m- VAR_A=/existent\x1b[0m\x1b[K",
+            "\x1b[92m+ VAR_A=/added:/existent\x1b[0m\x1b[K",
+            "\x1b[91m- VAR_B=\x1b[0m\x1b[K",
+            "\x1b[92m+ VAR_B=/added\x1b[0m\x1b[K",
+            "\x1b[91m- VAR_C=/removed:/existent\x1b[0m\x1b[K",
+            "\x1b[92m+ VAR_C=/added:/existent\x1b[0m\x1b[K",
         ]
         .join("");
         assert_eq!(result, 0);
