@@ -25,13 +25,13 @@ trait Logger<'out> {
     fn post_decoration(&self, _change: Option<&ChangeType>) -> &str {
         ""
     }
-    fn serialize(&self, name: &str, value: &str) -> String;
+    fn serialize(&self, name: &str, value: &str, change: Option<&ChangeType>) -> String;
     fn format_name_value(&self, name: &str, value: &str, change: Option<&ChangeType>) -> String {
         format!(
             "{pre}{serialized}{post}",
             pre = self.pre_decoration(change),
             post = self.post_decoration(change),
-            serialized = self.serialize(name, value)
+            serialized = self.serialize(name, value, change)
         )
     }
 }
@@ -58,12 +58,13 @@ impl<'out> Logger<'out> for OutputLogger<'out> {
     }
 
     fn pre_decoration(&self, change: Option<&ChangeType>) -> &str {
-        match (self.color, change) {
-            (_, None) => "  ",
-            (true, Some(ChangeType::Add)) => "\x1b[92m+ ",
-            (true, Some(ChangeType::Remove)) => "\x1b[91m+ ",
-            (false, Some(ChangeType::Add)) => " + ",
-            (false, Some(ChangeType::Remove)) => " - ",
+        match (self.json, self.color, change) {
+            (true, _, _) => "",
+            (_, _, None) => "  ",
+            (_, true, Some(ChangeType::Add)) => "\x1b[92m+ ",
+            (_, true, Some(ChangeType::Remove)) => "\x1b[91m- ",
+            (_, false, Some(ChangeType::Add)) => "+ ",
+            (_, false, Some(ChangeType::Remove)) => "- ",
         }
     }
 
@@ -78,9 +79,31 @@ impl<'out> Logger<'out> for OutputLogger<'out> {
         }
     }
 
-    fn serialize(&self, name: &str, value: &str) -> String {
+    fn serialize(&self, name: &str, value: &str, change: Option<&ChangeType>) -> String {
         if self.json {
-            format!("\"{}\":\"{}\"", name, value)
+            format!(
+                "{{\"type\":\"{}\",\"name\":\"{}\",\"value\":{}}}",
+                match change {
+                    None => "verbose",
+                    Some(ChangeType::Add) => "add",
+                    Some(ChangeType::Remove) => "remove",
+                },
+                name,
+                {
+                    let vals: Vec<&str> = value.split(":").collect();
+                    if vals.len() == 1 {
+                        format!("\"{}\"", value)
+                    } else {
+                        format!(
+                            "[{}]",
+                            vals.iter()
+                                .map(|v| format!("\"{}\"", v))
+                                .collect::<Vec<String>>()
+                                .join(",")
+                        )
+                    }
+                },
+            )
         } else {
             format!("{}={}", name, value)
         }
@@ -136,17 +159,8 @@ fn run_with_logger(
     0
 }
 
-// TODO: fix!
 fn diff_list(logger: &mut dyn Logger, list: &undo::List, current: &str) {
-    let formatted_deletions: Vec<String> = if false {
-        list.deletions
-            .iter()
-            .map(|x| "\x1b[48;5;52m".to_string() + x + "\x1b[0;91m")
-            .collect()
-    } else {
-        list.deletions.clone()
-    };
-    let mut prefix = formatted_deletions.join(":");
+    let mut prefix = list.deletions.clone().join(":");
 
     let items = current
         .split(':')
@@ -157,7 +171,7 @@ fn diff_list(logger: &mut dyn Logger, list: &undo::List, current: &str) {
         prefix += ":";
     }
     diff_remove(logger, &list.name, &(prefix + &suffix));
-
+    // TODO: fix
     let items = current.split(':').map(|x| {
         if list.additions.contains(&x.to_string()) && false {
             "\x1b[48;5;22m".to_string() + x + "\x1b[0;92m"
@@ -235,12 +249,13 @@ mod tests {
         let result = run_with_logger(&mut logger, env_vars, false, data.to_string());
 
         let expected: String = vec![
-            "- VAR_A=/existent",
-            "+ VAR_A=/added:/existent",
-            "- VAR_B=",
-            "+ VAR_B=/added",
-            "- VAR_C=/removed:/existent",
-            "+ VAR_C=/added:/existent",
+            // Did you try?
+            "[",
+            "{\"type\":\"add\",\"name\":\"VAR_A\",\"value\":[\"/added\",\"/existent\"]},",
+            "{\"type\":\"add\",\"name\":\"VAR_B\",\"value\":\"/added\"},",
+            "{\"type\":\"remove\",\"name\":\"VAR_C\",\"value\":[\"/removed\", \"/existent\"]},",
+            "{\"type\":\"add\",\"name\":\"VAR_C\",\"value\":[\"/existent\"]},",
+            "]",
         ]
         .join("");
         assert_eq!(result, 0);
