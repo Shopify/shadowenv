@@ -148,9 +148,4 @@ pub fn app() -> App<'static, 'static> {
                         .about("Prints a script which can be eval'd by fish to set up shadowenv."),
                 )
         )
-        .subcommand(
-            SubCommand::with_name("changes")
-                .about("Show the number of variables set / updated. Useful for tooling e.g. IDEs, prompts.")
-                .setting(AppSettings::DisableHelpSubcommand)
-        )
 }
