@@ -1,6 +1,6 @@
 # Theme settings
 doks:
-  baseurl: https://shopify.github.io/shadowenv
+  baseurl: /shadowenv
   color_theme: # Available themes: blue (default), green, purple, red and yellow
   header:
     logo:
