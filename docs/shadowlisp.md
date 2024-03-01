@@ -28,6 +28,7 @@ snippet that uses more features than most code will have to:
 
 <div class="example">
 </div>
+
 ```scheme
 (when-let ((rroot (env/get "RUBY_ROOT")))
  (env/remove-from-pathlist "PATH" (path-concat rroot "bin"))
