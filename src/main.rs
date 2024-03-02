@@ -51,9 +51,10 @@ fn main() {
         ("diff", Some(matches)) => {
             let verbose = matches.is_present("verbose");
             let color = !matches.is_present("no-color");
+            let json = matches.is_present("json");
             let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
             let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
-            process::exit(diff::run(verbose, color, data));
+            process::exit(diff::run(verbose, color, json, data));
         }
         ("trust", Some(_)) => {
             if let Err(err) = trust::run() {
