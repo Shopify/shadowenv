@@ -24,7 +24,7 @@ serde_derive = "1.0.85"
 serde_json = "1.0.40"
 shell-escape = "0.1.4"
 shellexpand = "1.0.0"
-ed25519-dalek = "1.0.1"
+ed25519-dalek = "2.0.0"
 ed25519 = "1.1.1"
 rand = "0.7"
 [dev-dependencies]
