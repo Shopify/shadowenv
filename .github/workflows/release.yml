@@ -7,29 +7,28 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11, ubuntu-latest]
-        target: [x86_64-unknown-linux-gnu, x86_64-apple-darwin, aarch64-apple-darwin]
-        exclude:
-        # Don't build linux targets on macos
-        - os: macos-11
-          target: x86_64-unknown-linux-gnu
-        # Don't build darwin targets on ubuntu
-        - os: ubuntu-latest
-          target: x86_64-apple-darwin
-        - os: ubuntu-latest
-          target: aarch64-apple-darwin
+        include:
+        - target: aarch64-apple-darwin
+          os: macos-11
+          arch: arm64
+        - target: x86_64-apple-darwin
+          os: macos-11
+          arch: amd64
+        - target: aarch64-unknown-linux-gnu
+          os: ubuntu-latest
+          arch: arm64
+        - target: x86_64-unknown-linux-gnu
+          os: ubuntu-latest
+          arch: amd64
     steps:
     - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
+    - uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         components: rustfmt, clippy
         target: ${{ matrix.target }}
         override: true
-    - uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: --release --target ${{ matrix.target }}
+    - run: cargo build --release --target ${{ matrix.target }}
     - uses: Shopify/upload-to-release@master
       with:
         name: shadowenv-${{ matrix.target }}
