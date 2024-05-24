@@ -1,6 +1,6 @@
 [package]
 name = "shadowenv"
-version = "2.1.1"
+version = "2.1.2"
 authors = ["Burke Libbey <burke@libbey.me>", "Lisa Ugray <lisa.ugray@shopify.com>", "Aaron Olson <aaron.olson@shopify.com>"]
 edition = "2018"
 
