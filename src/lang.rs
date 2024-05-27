@@ -270,7 +270,7 @@ impl ShadowLang {
         let mut files = source.files.clone();
         files.sort();
         let original_path = env::current_dir();
-        let _ = env::set_current_dir(Path::new(&source.dir));
+        let _ = env::set_current_dir(Path::new(&source.dirs.last().unwrap()));
 
         for source_file in &files {
             let fname = format!("__shadowenv__{}", source_file.name);
@@ -316,7 +316,7 @@ mod tests {
 
     fn build_source(content: &str) -> Source {
         Source {
-            dir: "dir".to_string(),
+            dirs: vec!["dir".to_string()],
             files: vec![SourceFile {
                 name: "file.lisp".to_string(),
                 contents: content.to_string(),

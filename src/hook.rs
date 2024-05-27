@@ -116,7 +116,19 @@ fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
             }
             .into());
         }
-        return Ok(loader::load(root)?);
+
+        let dirpaths: Vec<PathBuf> = match env::var("SHADOWENV_PATH") {
+            Ok(v) => v.split(":").map({ |p|
+                if p == "" {
+                    root.clone()
+                } else {
+                    PathBuf::from(p)
+                }
+            }).collect(),
+            Err(_) => vec![root],
+        };
+
+        return Ok(loader::load(dirpaths)?);
     }
     Ok(None)
 }

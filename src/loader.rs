@@ -27,19 +27,25 @@ pub fn find_root(at: &PathBuf, relative_component: &str) -> Result<Option<PathBu
 /// `SourceFiles` inside a `Source` struct.
 ///
 /// Note that this function assumes that the dirpath is trusted.
-pub fn load(dirpath: PathBuf) -> Result<Option<Source>, Error> {
-    let mut source = Source::new(dirpath.parent().unwrap().to_string_lossy().to_string());
+pub fn load(dirpaths: Vec<PathBuf>) -> Result<Option<Source>, Error> {
+    let dirs = dirpaths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+    let mut source = Source::new(dirs);
 
-    for entry in fs::read_dir(dirpath)?.flatten() {
-        let path = entry.path();
-        if path.is_file() {
-            // TODO: there HAS to be a better way to do this.
-            let basename = path.file_name().unwrap().to_string_lossy().to_string();
-            if !basename.ends_with(".lisp") {
-                continue;
+    for dirpath in dirpaths {
+        if !dirpath.exists() {
+            continue;
+        }
+        for entry in fs::read_dir(dirpath)?.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                // TODO: there HAS to be a better way to do this.
+                let basename = path.file_name().unwrap().to_string_lossy().to_string();
+                if !basename.ends_with(".lisp") {
+                    continue;
+                }
+                let contents = fs::read_to_string(&path)?;
+                source.add_file(basename, contents);
             }
-            let contents = fs::read_to_string(&path)?;
-            source.add_file(basename, contents);
         }
     }
 
@@ -59,7 +65,7 @@ mod tests {
         let path: PathBuf = [env!("CARGO_MANIFEST_DIR"), "tests", "fixtures", "simple"]
             .iter()
             .collect();
-        let res = load(path);
+        let res = load(vec![path]);
         let source = res.unwrap().unwrap();
         assert_eq!(source.files.len(), 2, "it should contain 2 files");
         let mut files = source.files.clone();
