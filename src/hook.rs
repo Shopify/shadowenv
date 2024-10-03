@@ -100,7 +100,6 @@ pub fn load_env(
 
     match targets {
         Some(targets) => {
-            // this is so fucking cool
             // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
             match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
@@ -111,8 +110,6 @@ pub fn load_env(
             }
         }
         // note the "false" since we didn't have anything to run
-        // you can in-fact activate two shadowenvs in a row (ie. cd into infra-central then into sbominator, see two activation messages)
-        // and when it deactivates it remembers the environment variables you had set before activating any shadowenv, like you'd expect
         None => Ok(Some((shadowenv, false))),
     }
 }
@@ -148,10 +145,7 @@ fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<Vec<Source>>, Error> 
 
 fn hash_sources(sources: &Option<Vec<Source>>) -> Option<u64> {
     // TODO: actually hash
-    if let Some(_sources) = sources {
-        return Some(0);
-    }
-    None
+    unimplemented!();
 }
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
