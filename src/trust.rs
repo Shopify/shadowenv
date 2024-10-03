@@ -25,14 +25,24 @@ pub struct NotTrusted {
     pub not_trusted_dir_path: String,
 }
 
-pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
+pub fn is_dir_tree_trusted(dir: &PathBuf) -> Result<bool, Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let root = match loader::find_root(&dir.to_path_buf(), loader::DEFAULT_RELATIVE_COMPONENT)? {
-        None => return Err(NoShadowenv {}.into()),
-        Some(r) => r,
-    };
+    let roots = loader::find_roots(&dir.to_path_buf(), loader::DEFAULT_RELATIVE_COMPONENT)?;
+    if roots.is_empty() {
+        return Err(NoShadowenv {}.into());
+    }
 
+    for root in roots {
+        if !is_dir_trusted(&signer, root)? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+fn is_dir_trusted(signer: &SigningKey, root: PathBuf) -> Result<bool, Error> {
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
@@ -89,11 +99,19 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 pub fn run() -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let root = match loader::find_root(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)? {
-        None => return Err(NoShadowenv {}.into()),
-        Some(r) => r,
-    };
+    let roots = loader::find_roots(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    if roots.is_empty() {
+        return Err(NoShadowenv {}.into());
+    }
 
+    for root in roots {
+        trust_dir(&signer, root)?
+    }
+
+    Ok(())
+}
+
+fn trust_dir(signer: &SigningKey, root: PathBuf) -> Result<(), Error> {
     let d = root.display().to_string();
     let msg = d.as_bytes();
     let sig = signer.sign(msg);

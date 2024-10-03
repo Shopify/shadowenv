@@ -6,17 +6,19 @@ pub const DEFAULT_RELATIVE_COMPONENT: &str = ".shadowenv.d";
 
 /// Search upwards the filesystem branch starting with `at` and then its ancestors looking
 /// for a file or directory named `relative_component`.
-pub fn find_root(at: &PathBuf, relative_component: &str) -> Result<Option<PathBuf>, Error> {
+pub fn find_roots(at: &PathBuf, relative_component: &str) -> Result<Vec<PathBuf>, Error> {
+    let mut roots = Vec::new();
+
     for curr in at.ancestors() {
         let dirpath = curr.join(relative_component);
 
         match fs::read_dir(&dirpath) {
-            Ok(_) => return Ok(Some(fs::canonicalize(dirpath)?)),
+            Ok(_) => roots.push(fs::canonicalize(dirpath)?),
             Err(ref e) if e.kind() == ErrorKind::NotFound => (),
             Err(e) => return Err(e.into()),
         }
     }
-    Ok(None)
+    Ok(roots)
 }
 
 /// Load all .lisp files in the directory pointed by `dirpath` storing their names and contents as

@@ -67,51 +67,91 @@ pub fn load_env(
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    let target: Option<Source> = load_trusted_source(pathbuf)?;
+    // "targets" are sources of shadowenv lisp files
+    let targets: Option<Vec<Source>> = load_trusted_sources(pathbuf)?;
 
-    match (&active, &target) {
+    let targets_hash = hash_sources(&targets);
+
+    // before we had multiple targets, this ensured we only act if we needed to
+    match (&active, &targets) {
+        // if there is no active shadowenv and we've got no targets, then we have nothing to compute
         (None, None) => {
             return Ok(None);
         }
-        (Some(a), Some(t)) if a.hash == t.hash()? && !force => {
+        // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
+        // unless the foce flag was specified
+        // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
+        (Some(a), Some(t)) if a.hash == targets_hash.unwrap() && !force => {
             return Ok(None);
         }
         (_, _) => (),
     }
 
-    let target_hash = match &target {
-        Some(t) => t.hash().unwrap_or(0),
-        None => 0,
-    };
+    // should probably be a hash of all the target's hashes (?, see above comment)
+    // let target_hash = match &targets {
+    //     Some(t) => t.hash().unwrap_or(0),
+    //     None => 0,
+    // };
 
+    // "data" is used to undo changes made when activating a shadowenv
+    // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(env::vars().collect(), data, target_hash);
+    let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
 
-    match target {
-        Some(target) => {
-            match ShadowLang::run_program(shadowenv, target) {
+    match targets {
+        Some(targets) => {
+            // this is so fucking cool
+            // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
+            match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
                 Err(_) => Err(lang::ShadowlispError {}.into()),
+                // note the "true" since we ran code to activate/modify the shadowenv
                 Ok(shadowenv) => Ok(Some((shadowenv, true))),
             }
         }
+        // note the "false" since we didn't have anything to run
+        // you can in-fact activate two shadowenvs in a row (ie. cd into infra-central then into sbominator, see two activation messages)
+        // and when it deactivates it remembers the environment variables you had set before activating any shadowenv, like you'd expect
         None => Ok(Some((shadowenv, false))),
     }
 }
 
-/// Load a Source from the current dir, ensuring that it is trusted.
-fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
-    if let Some(root) = loader::find_root(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)? {
-        if !trust::is_dir_trusted(&root)? {
+/// Load all Sources from the current dir, ensuring that they are all trusted.
+fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<Vec<Source>>, Error> {
+    let roots = loader::find_roots(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    if roots.is_empty() {
+        return Ok(None);
+    }
+
+    let mut sources: Vec<Source> = Vec::new();
+    for root in roots {
+        if !trust::is_dir_tree_trusted(&root)? {
             return Err(trust::NotTrusted {
                 not_trusted_dir_path: pathbuf.to_string_lossy().to_string(),
             }
             .into());
         }
-        return Ok(loader::load(root)?);
+        let source = loader::load(root)?;
+        if let Some(source) = source {
+            // stack would be more efficient
+            sources.insert(0, source);
+        }
     }
-    Ok(None)
+
+    if sources.is_empty() {
+        return Ok(None);
+    }
+
+    return Ok(Some(sources));
+}
+
+fn hash_sources(sources: &Option<Vec<Source>>) -> Option<u64> {
+    // TODO: actually hash
+    if let Some(_sources) = sources {
+        return Some(0);
+    }
+    None
 }
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
@@ -198,7 +238,7 @@ mod tests {
         let temp_dir = tempdir().unwrap().into_path();
         let path = temp_dir.to_string_lossy().to_string();
         fs::create_dir(temp_dir.join(".shadowenv.d")).unwrap();
-        let result = load_trusted_source(temp_dir);
+        let result = load_trusted_sources(temp_dir);
         assert!(result.is_err());
         assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
     }
