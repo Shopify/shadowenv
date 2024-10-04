@@ -79,7 +79,7 @@ pub fn load_env(
             return Ok(None);
         }
         // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
-        // unless the foce flag was specified
+        // unless the force flag was specified
         // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
         (Some(a), Some(t)) if a.hash == targets_hash.unwrap() && !force => {
             return Ok(None);
