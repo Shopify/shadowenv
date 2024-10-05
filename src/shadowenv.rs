@@ -4,6 +4,7 @@ use crate::{features::Feature, undo};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env,
+    path::PathBuf,
 };
 
 #[derive(Debug)]
@@ -19,6 +20,8 @@ pub struct Shadowenv {
     /// list of features provided by all plugins
     features: HashSet<Feature>,
     target_hash: u64,
+    prev_dirs: HashSet<PathBuf>,
+    current_dirs: HashSet<PathBuf>,
 }
 
 impl Shadowenv {
@@ -33,6 +36,7 @@ impl Shadowenv {
         env: HashMap<String, String>,
         shadowenv_data: undo::Data,
         target_hash: u64,
+        prev_dirs: HashSet<PathBuf>,
     ) -> Shadowenv {
         let unshadowed_env = Shadowenv::unshadow(&env, shadowenv_data);
 
@@ -43,6 +47,8 @@ impl Shadowenv {
             lists: HashSet::new(),
             features: HashSet::new(),
             target_hash,
+            prev_dirs,
+            current_dirs: HashSet::new(),
         }
     }
 
@@ -104,7 +110,11 @@ impl Shadowenv {
 
     fn format_shadowenv_data(&self) -> Result<String, Error> {
         let d = self.shadowenv_data();
-        Ok(format!("{:016x}:", self.target_hash) + &serde_json::to_string(&d)?)
+        Ok(format!(
+            "{:016x}:{}:",
+            self.target_hash,
+            &serde_json::to_string(&self.current_dirs)?
+        ) + &serde_json::to_string(&d)?)
     }
 
     pub fn exports(&self) -> Result<HashMap<String, Option<String>>, Error> {
@@ -161,6 +171,20 @@ impl Shadowenv {
 
     pub fn features(&self) -> HashSet<Feature> {
         self.features.iter().cloned().collect()
+    }
+
+    pub fn current_dirs(&self) -> HashSet<PathBuf> {
+        self.current_dirs.iter().cloned().collect()
+    }
+
+    pub fn prev_dirs(&self) -> HashSet<PathBuf> {
+        self.prev_dirs.iter().cloned().collect()
+    }
+
+    pub fn add_dirs(&mut self, dirs: Vec<PathBuf>) {
+        for dir in dirs {
+            self.current_dirs.insert(dir);
+        }
     }
 
     fn inform_list(&mut self, a: &str) {
@@ -281,24 +305,28 @@ mod tests {
     use crate::undo::{Data, List, Scalar};
     use std::collections::HashMap;
 
-    fn build_shadow_env(env_variables: Vec<(&str, &str)>, data: Data) -> Shadowenv {
+    fn build_shadow_env(
+        env_variables: Vec<(&str, &str)>,
+        data: Data,
+        prev_dirs: HashSet<PathBuf>,
+    ) -> Shadowenv {
         let env = env_variables
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect::<HashMap<_, _>>();
-        Shadowenv::new(env, data, 123456789)
+        Shadowenv::new(env, data, 123456789, prev_dirs)
     }
 
     #[test]
     fn test_get_set() {
-        let mut shadowenv = build_shadow_env(vec![], Default::default());
+        let mut shadowenv = build_shadow_env(vec![], Default::default(), HashSet::new());
         shadowenv.set("toto", Some("tata"));
         assert_eq!(shadowenv.get("toto"), Some("tata".to_string()))
     }
 
     #[test]
     fn test_path_manipulation() {
-        let mut shadowenv = build_shadow_env(vec![], Default::default());
+        let mut shadowenv = build_shadow_env(vec![], Default::default(), HashSet::new());
         shadowenv.append_to_pathlist("field1", "v1");
         shadowenv.prepend_to_pathlist("field1", "v0");
 
@@ -312,6 +340,7 @@ mod tests {
         let mut shadowenv = build_shadow_env(
             vec![("VAR_A", "v0"), ("VAR_B", "v0"), ("PATH", "/path1:/path2")],
             Default::default(),
+            HashSet::new(),
         );
         shadowenv.append_to_pathlist("PATH", "/path3");
         shadowenv.prepend_to_pathlist("PATH", "/path4");
@@ -346,7 +375,7 @@ mod tests {
             }],
         };
 
-        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2"},{"name":"VAR_B","original":"v0","current":null},{"name":"VAR_C","original":null,"current":"v3"}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}]}"#;
+        let expected_formatted_data = r#"00000000075bcd15:[]:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2"},{"name":"VAR_B","original":"v0","current":null},{"name":"VAR_C","original":null,"current":"v3"}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}]}"#;
 
         assert_eq!(shadowenv.shadowenv_data(), expected);
 

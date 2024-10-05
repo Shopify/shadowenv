@@ -80,10 +80,12 @@ fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
 impl ShadowLang {
     pub fn run_programs(shadowenv: Shadowenv, sources: SourceList) -> Result<Shadowenv, Error> {
         let wrapper = Rc::new(ShadowenvWrapper::new(shadowenv));
+        let dirs = sources.shortened_dirs();
         for source in sources.consume() {
             Self::run(&wrapper, source)?;
         }
-        let result = Rc::try_unwrap(wrapper).unwrap().into_inner();
+        let mut result = Rc::try_unwrap(wrapper).unwrap().into_inner();
+        result.add_dirs(dirs);
         Ok(result)
     }
 
@@ -330,7 +332,7 @@ mod tests {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect::<HashMap<_, _>>();
-        Shadowenv::new(env, Data::new(), 0)
+        Shadowenv::new(env, Data::new(), 0, HashSet::new())
     }
 
     #[test]

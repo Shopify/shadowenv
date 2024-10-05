@@ -6,7 +6,14 @@ use crate::{
 };
 use anyhow::Error;
 use serde_derive::Serialize;
-use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    env,
+    path::PathBuf,
+    result::Result,
+    str::FromStr,
+};
 
 use crate::lang::ShadowLang;
 use shell_escape as shell;
@@ -43,8 +50,8 @@ pub fn run(
     force: bool,
 ) -> Result<(), Error> {
     match load_env(pathbuf, shadowenv_data, force)? {
-        Some((shadowenv, active_dirs)) => {
-            apply_env(&shadowenv, mode, active_dirs)?;
+        Some(shadowenv) => {
+            apply_env(&shadowenv, mode)?;
             Ok(())
         }
         None => Ok(()),
@@ -55,9 +62,10 @@ pub fn load_env(
     pathbuf: PathBuf,
     shadowenv_data: String,
     force: bool,
-) -> Result<Option<(Shadowenv, Vec<PathBuf>)>, Error> {
-    let mut parts = shadowenv_data.splitn(2, ":");
+) -> Result<Option<Shadowenv>, Error> {
+    let mut parts = shadowenv_data.splitn(3, ":");
     let prev_hash = parts.next();
+    let prev_dirs = parts.next().unwrap_or("[]");
     let json_data = parts.next().unwrap_or("{}");
 
     let active: Option<Hash> = match prev_hash {
@@ -96,22 +104,27 @@ pub fn load_env(
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
+    let prev_dirs: HashSet<PathBuf> = serde_json::from_str(prev_dirs)?;
+    let shadowenv = Shadowenv::new(
+        env::vars().collect(),
+        data,
+        targets_hash.unwrap_or(0),
+        prev_dirs,
+    );
 
     match targets {
         Some(targets) => {
-            let dirs = targets.shortened_dirs();
             // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
             match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
                 Err(_) => Err(lang::ShadowlispError {}.into()),
                 // note the "true" since we ran code to activate/modify the shadowenv
-                Ok(shadowenv) => Ok(Some((shadowenv, dirs))),
+                Ok(shadowenv) => Ok(Some(shadowenv)),
             }
         }
         // note the "false" since we didn't have anything to run
-        None => Ok(Some((shadowenv, Vec::new()))),
+        None => Ok(Some(shadowenv)),
     }
 }
 
@@ -156,11 +169,7 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn apply_env(
-    shadowenv: &Shadowenv,
-    mode: VariableOutputMode,
-    active_dirs: Vec<PathBuf>,
-) -> Result<(), Error> {
+pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
     match mode {
         VariableOutputMode::PosixMode => {
             for (k, v) in shadowenv.exports()? {
@@ -169,7 +178,11 @@ pub fn apply_env(
                     None => println!("unset {}", k),
                 }
             }
-            output::print_activation_to_tty(active_dirs, shadowenv.features());
+            output::print_activation_to_tty(
+                shadowenv.current_dirs(),
+                shadowenv.prev_dirs(),
+                shadowenv.features(),
+            );
         }
         VariableOutputMode::FishMode => {
             for (k, v) in shadowenv.exports()? {
@@ -187,7 +200,11 @@ pub fn apply_env(
                     }
                 }
             }
-            output::print_activation_to_tty(active_dirs, shadowenv.features());
+            output::print_activation_to_tty(
+                shadowenv.current_dirs(),
+                shadowenv.prev_dirs(),
+                shadowenv.features(),
+            );
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>

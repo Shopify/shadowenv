@@ -36,15 +36,33 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     1
 }
 
-pub fn print_activation_to_tty(active_dirs: Vec<PathBuf>, features: HashSet<Feature>) {
+pub fn print_activation_to_tty(
+    current_dirs: HashSet<PathBuf>,
+    prev_dirs: HashSet<PathBuf>,
+    features: HashSet<Feature>,
+) {
     if !should_print_activation() {
         return;
     }
-    if !active_dirs.is_empty() {
+    let added_dirs: HashSet<PathBuf> = current_dirs.difference(&prev_dirs).cloned().collect();
+    let removed_dirs: HashSet<PathBuf> = prev_dirs.difference(&current_dirs).cloned().collect();
+
+    let in_shadowenv = !current_dirs.is_empty();
+    let previously_in_shadowenv = !prev_dirs.is_empty();
+
+    if in_shadowenv {
         if features.is_empty() {
-            eprint!("\x1b[1;34mactivated {} ", SHADOWENV);
-            for dir in active_dirs {
-                eprintln!("{} ", dir.display());
+            if prev_dirs.is_empty() {
+                eprint!("\x1b[1;34mactivated {} ", SHADOWENV);
+            } else {
+                eprint!("\x1b[1;34mmodified {} ", SHADOWENV);
+            }
+
+            for dir in added_dirs {
+                eprint!("\n\x1b[1;32m+ {} \x1b[0m", dir.display());
+            }
+            for dir in removed_dirs {
+                eprint!("\n\x1b[1;31m- {} \x1b[0m", dir.display());
             }
         } else {
             let feature_list = features
@@ -52,16 +70,30 @@ pub fn print_activation_to_tty(active_dirs: Vec<PathBuf>, features: HashSet<Feat
                 .map(|s| format!("{}", s))
                 .collect::<Vec<String>>()
                 .join(", ");
-            eprint!(
-                "\x1b[1;34mactivated {} \x1b[1;34m({}) ",
-                SHADOWENV, feature_list
-            );
-            for dir in active_dirs {
-                eprintln!("{} ", dir.display());
+            if prev_dirs.is_empty() {
+                eprint!(
+                    "\x1b[1;34mactivated {} \x1b[1;34m({}) ",
+                    SHADOWENV, feature_list
+                );
+            } else {
+                eprint!(
+                    "\x1b[1;34mmodified {} \x1b[1;34m({}) ",
+                    SHADOWENV, feature_list
+                );
+            }
+
+            for dir in added_dirs {
+                eprint!("\n\x1b[1;32m+ {} \x1b[0m", dir.display());
+            }
+            for dir in removed_dirs {
+                eprint!("\n\x1b[1;31m- {} \x1b[0m", dir.display());
             }
         }
-    } else {
+    } else if previously_in_shadowenv {
         eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);
+        for dir in removed_dirs {
+            eprint!("\n\x1b[1;31m- {} \x1b[0m", dir.display());
+        }
     }
     eprintln!("\x1b[0m");
 }
