@@ -1,12 +1,16 @@
 use crate::hash::Source;
 use anyhow::Error;
-use std::{fs, io::ErrorKind, path::PathBuf};
+use std::{
+    fs,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+};
 
 pub const DEFAULT_RELATIVE_COMPONENT: &str = ".shadowenv.d";
 
 /// Search upwards the filesystem branch starting with `at` and then its ancestors looking
 /// for a file or directory named `relative_component`.
-pub fn find_roots(at: &PathBuf, relative_component: &str) -> Result<Vec<PathBuf>, Error> {
+pub fn find_roots(at: &Path, relative_component: &str) -> Result<Vec<PathBuf>, Error> {
     let mut roots = Vec::new();
 
     for curr in at.ancestors() {

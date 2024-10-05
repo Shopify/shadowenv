@@ -25,7 +25,7 @@ impl Shadowenv {
     pub fn load_shadowenv_data_or_legacy_fallback(fallback_data: Option<String>) -> String {
         match env::var("__shadowenv_data") {
             Ok(priority_data) => priority_data,
-            Err(_) => fallback_data.unwrap_or_else(|| "".to_string()),
+            Err(_) => fallback_data.unwrap_or_default(),
         }
     }
 
@@ -261,13 +261,13 @@ fn diff_vecs(oldvec: Vec<&str>, newvec: Vec<&str>) -> (Vec<String>, Vec<String>)
     }
 
     for oldval in oldvec {
-        if !newset.contains(&oldval.to_string()) {
+        if !newset.contains(oldval) {
             deletions.push(oldval.to_string());
         }
     }
 
     for newval in newvec {
-        if !oldset.contains(&newval.to_string()) {
+        if !oldset.contains(newval) {
             additions.push(newval.to_string());
         }
     }

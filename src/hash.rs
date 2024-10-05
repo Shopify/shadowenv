@@ -5,6 +5,7 @@ use blake2::{
 };
 use std::{
     cmp::{Ord, Ordering},
+    fmt::Display,
     result::Result,
     str::FromStr,
     u64,
@@ -96,14 +97,15 @@ impl FromStr for Hash {
         if key.len() != 16 {
             return Err(WrongInputSize {}.into());
         }
+
         let hash = u64::from_str_radix(key, 16)?;
         Ok(Hash { hash })
     }
 }
 
-impl ToString for Hash {
-    fn to_string(&self) -> String {
-        format!("{:016x}", self.hash)
+impl Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:016x}", self.hash)
     }
 }
 

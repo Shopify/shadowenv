@@ -69,7 +69,7 @@ fn main() {
                 (_, _) => unreachable!(),
             };
             let dir = matches.value_of("dir");
-            let pathbuf = dir.map(|d| PathBuf::from(d)).unwrap_or(current_dir);
+            let pathbuf = dir.map(PathBuf::from).unwrap_or(current_dir);
             if let Err(err) = execcmd::run(pathbuf, data, argv) {
                 eprintln!("{}", err);
                 process::exit(1);

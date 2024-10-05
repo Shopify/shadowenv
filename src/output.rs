@@ -6,13 +6,13 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::IsTerminal,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
 
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
-const SHADOWENV: &'static str = concat!(
+const SHADOWENV: &str = concat!(
     "\x1b[38;5;249ms\x1b[38;5;248mh\x1b[38;5;247ma\x1b[38;5;246md\x1b[38;5;245mo",
     "\x1b[38;5;244mw\x1b[38;5;243me\x1b[38;5;242mn\x1b[38;5;241mv\x1b[38;5;240m",
 );
@@ -33,7 +33,7 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     };
     let err = backticks_to_bright_green(err);
     eprintln!("{} \x1b[1;31mfailure: {}\x1b[0m", SHADOWENV, err);
-    return 1;
+    1
 }
 
 pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
@@ -41,7 +41,7 @@ pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
         return;
     }
     if activated {
-        if features.len() == 0 {
+        if features.is_empty() {
             eprint!("\x1b[1;34mactivated {}", SHADOWENV);
         } else {
             let feature_list = features
@@ -94,10 +94,7 @@ fn check_and_trigger_cooldown(err: &Error, shellpid: u32) -> Result<bool, Error>
 }
 
 fn cooldown_index(err: &Error) -> Option<u32> {
-    match err.downcast_ref::<trust::NotTrusted>() {
-        Some(_) => Some(0),
-        None => None,
-    }
+    err.downcast_ref::<trust::NotTrusted>().map(|_| 0)
 }
 
 fn clean_up_stale_errors(root: &PathBuf, timeout: Duration) -> Result<(), Error> {
@@ -120,12 +117,12 @@ fn clean_up_stale_errors(root: &PathBuf, timeout: Duration) -> Result<(), Error>
     Ok(())
 }
 
-fn err_file(root: &PathBuf, errindex: u32, shellpid: u32) -> Result<PathBuf, Error> {
+fn err_file(root: &Path, errindex: u32, shellpid: u32) -> Result<PathBuf, Error> {
     Ok(root.join(format!(".error-{}-{}", errindex, shellpid)))
 }
 
 // return value of Ok(true) indicates it's on cooldown and should be suppressed.
-fn check_cooldown_sentinel(path: &PathBuf, timeout: Duration) -> Result<bool, Error> {
+fn check_cooldown_sentinel(path: &Path, timeout: Duration) -> Result<bool, Error> {
     let metadata = path.metadata()?;
     let mtime = metadata.modified()?;
 
@@ -154,5 +151,5 @@ fn should_print_activation() -> bool {
         Err(_) => configured_to_print = true,
     };
 
-    return std::io::stderr().is_terminal() && configured_to_print;
+    std::io::stderr().is_terminal() && configured_to_print
 }

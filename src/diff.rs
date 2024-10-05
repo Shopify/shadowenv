@@ -49,9 +49,9 @@ fn run_with_logger(
 
     for (name, value) in env_vars {
         if let Some(scalar) = scalars.remove(&name) {
-            diff_scalar(logger, &scalar, color)
+            diff_scalar(logger, scalar, color)
         } else if let Some(list) = lists.remove(&name) {
-            diff_list(logger, &list, &value, color)
+            diff_list(logger, list, &value, color)
         } else if verbose {
             print_verbose(logger, &name, &value)
         }
@@ -157,7 +157,7 @@ mod tests {
         let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_C","additions":["/added"],"deletions":["/removed"]},{"name":"VAR_B","additions":["/added"],"deletions":[]},{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
         let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
 
-        let expected: Vec<_> = vec![
+        let expected: Vec<_> = [
             "- VAR_A=/existent",
             "+ VAR_A=/added:/existent",
             "- VAR_B=",

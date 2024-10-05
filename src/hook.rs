@@ -28,11 +28,11 @@ struct Modifications {
 
 impl Modifications {
     fn new(exports: HashMap<String, Option<String>>) -> Modifications {
-        return Modifications {
+        Modifications {
             schema: "v2".to_string(),
             exported: exports,
             unexported: HashMap::new(),
-        };
+        }
     }
 }
 
