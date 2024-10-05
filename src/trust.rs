@@ -25,13 +25,8 @@ pub struct NotTrusted {
     pub not_trusted_dir_path: String,
 }
 
-pub fn is_dir_tree_trusted(dir: &Path) -> Result<bool, Error> {
+pub fn is_dir_tree_trusted(roots: &Vec<PathBuf>) -> Result<bool, Error> {
     let signer = load_or_generate_signer().unwrap();
-
-    let roots = loader::find_roots(dir, loader::DEFAULT_RELATIVE_COMPONENT)?;
-    if roots.is_empty() {
-        return Err(NoShadowenv {}.into());
-    }
 
     for root in roots {
         if !is_dir_trusted(&signer, root)? {
@@ -42,14 +37,14 @@ pub fn is_dir_tree_trusted(dir: &Path) -> Result<bool, Error> {
     Ok(true)
 }
 
-fn is_dir_trusted(signer: &SigningKey, root: PathBuf) -> Result<bool, Error> {
+fn is_dir_trusted(signer: &SigningKey, root: &Path) -> Result<bool, Error> {
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let d = root.display().to_string();
     let msg = d.as_bytes();
 
-    let path = trust_file(&root, fingerprint);
+    let path = trust_file(root, fingerprint);
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),

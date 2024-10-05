@@ -43,8 +43,8 @@ pub fn run(
     force: bool,
 ) -> Result<(), Error> {
     match load_env(pathbuf, shadowenv_data, force)? {
-        Some((shadowenv, activation)) => {
-            apply_env(&shadowenv, mode, activation)?;
+        Some((shadowenv, active_dirs)) => {
+            apply_env(&shadowenv, mode, active_dirs)?;
             Ok(())
         }
         None => Ok(()),
@@ -55,7 +55,7 @@ pub fn load_env(
     pathbuf: PathBuf,
     shadowenv_data: String,
     force: bool,
-) -> Result<Option<(Shadowenv, bool)>, Error> {
+) -> Result<Option<(Shadowenv, Vec<PathBuf>)>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -100,17 +100,18 @@ pub fn load_env(
 
     match targets {
         Some(targets) => {
+            let dirs = targets.shortened_dirs();
             // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
             match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
                 Err(_) => Err(lang::ShadowlispError {}.into()),
                 // note the "true" since we ran code to activate/modify the shadowenv
-                Ok(shadowenv) => Ok(Some((shadowenv, true))),
+                Ok(shadowenv) => Ok(Some((shadowenv, dirs))),
             }
         }
         // note the "false" since we didn't have anything to run
-        None => Ok(Some((shadowenv, false))),
+        None => Ok(Some((shadowenv, Vec::new()))),
     }
 }
 
@@ -121,14 +122,15 @@ fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<SourceList>, Error> {
         return Ok(None);
     }
 
+    if !trust::is_dir_tree_trusted(&roots)? {
+        return Err(trust::NotTrusted {
+            not_trusted_dir_path: pathbuf.to_string_lossy().to_string(),
+        }
+        .into());
+    }
+
     let mut source_list = SourceList::new();
     for root in roots {
-        if !trust::is_dir_tree_trusted(&root)? {
-            return Err(trust::NotTrusted {
-                not_trusted_dir_path: pathbuf.to_string_lossy().to_string(),
-            }
-            .into());
-        }
         let source = loader::load(root)?;
         if let Some(source) = source {
             // stack would be more efficient
@@ -157,7 +159,7 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
 pub fn apply_env(
     shadowenv: &Shadowenv,
     mode: VariableOutputMode,
-    activation: bool,
+    active_dirs: Vec<PathBuf>,
 ) -> Result<(), Error> {
     match mode {
         VariableOutputMode::PosixMode => {
@@ -167,7 +169,7 @@ pub fn apply_env(
                     None => println!("unset {}", k),
                 }
             }
-            output::print_activation_to_tty(activation, shadowenv.features());
+            output::print_activation_to_tty(active_dirs, shadowenv.features());
         }
         VariableOutputMode::FishMode => {
             for (k, v) in shadowenv.exports()? {
@@ -185,7 +187,7 @@ pub fn apply_env(
                     }
                 }
             }
-            output::print_activation_to_tty(activation, shadowenv.features());
+            output::print_activation_to_tty(active_dirs, shadowenv.features());
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>

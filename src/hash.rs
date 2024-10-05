@@ -6,6 +6,7 @@ use blake2::{
 use std::{
     cmp::{Ord, Ordering},
     fmt::Display,
+    path::PathBuf,
     result::Result,
     str::FromStr,
     u64,
@@ -153,6 +154,31 @@ impl SourceList {
 
     pub fn consume(self) -> Vec<Source> {
         self.sources
+    }
+
+    pub fn shortened_dirs(&self) -> Vec<PathBuf> {
+        let dirs: Vec<PathBuf> = self
+            .sources
+            .iter()
+            .map(|source| source.dir.clone())
+            .map(|dir| dir.parse().expect("dir not a valid path"))
+            .collect();
+
+        if dirs.is_empty() {
+            return Vec::new();
+        }
+
+        let highest_dir = dirs.first().unwrap();
+        let depth = highest_dir.components().count() - 1;
+
+        dirs.iter()
+            .map(|dir| {
+                dir.components()
+                    .skip(depth)
+                    .map(|comp| comp.as_os_str())
+                    .fold(PathBuf::new(), |acc, comp| acc.join(comp))
+            })
+            .collect()
     }
 }
 

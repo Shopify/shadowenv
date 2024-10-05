@@ -36,13 +36,16 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     1
 }
 
-pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
+pub fn print_activation_to_tty(active_dirs: Vec<PathBuf>, features: HashSet<Feature>) {
     if !should_print_activation() {
         return;
     }
-    if activated {
+    if !active_dirs.is_empty() {
         if features.is_empty() {
-            eprint!("\x1b[1;34mactivated {}", SHADOWENV);
+            eprint!("\x1b[1;34mactivated {} ", SHADOWENV);
+            for dir in active_dirs {
+                eprintln!("{} ", dir.display());
+            }
         } else {
             let feature_list = features
                 .iter()
@@ -50,9 +53,12 @@ pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
                 .collect::<Vec<String>>()
                 .join(", ");
             eprint!(
-                "\x1b[1;34mactivated {} \x1b[1;34m({})",
+                "\x1b[1;34mactivated {} \x1b[1;34m({}) ",
                 SHADOWENV, feature_list
             );
+            for dir in active_dirs {
+                eprintln!("{} ", dir.display());
+            }
         }
     } else {
         eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);
