@@ -14,6 +14,11 @@ const FILE_SEPARATOR: &str = "\x1C";
 const GROUP_SEPARATOR: &str = "\x1D";
 
 #[derive(Debug, Clone)]
+pub struct SourceList {
+    sources: Vec<Source>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Source {
     pub dir: String,
     pub files: Vec<SourceFile>,
@@ -61,13 +66,15 @@ impl Source {
         self.files.push(SourceFile { name, contents })
     }
 
-    pub fn hash(&self) -> Result<u64, Error> {
+    pub fn hash(&self) -> Option<u64> {
         if self.files.is_empty() {
-            return Ok(0);
+            return None;
         }
-        let mut hasher = Blake2bVar::new(8)?;
+
+        let mut hasher = Blake2bVar::new(8).expect("bad hasher output size");
         hasher.update(self.dir.as_bytes());
         hasher.update(FILE_SEPARATOR.as_bytes());
+
         for file in self.files.iter() {
             hasher.update(file.name.as_bytes());
             hasher.update(GROUP_SEPARATOR.as_bytes());
@@ -78,7 +85,7 @@ impl Source {
         let mut buf = [0u8; 8];
         hasher.finalize_variable(&mut buf).unwrap();
 
-        Ok(u64::from_ne_bytes(buf))
+        Some(u64::from_ne_bytes(buf))
     }
 }
 
@@ -97,6 +104,53 @@ impl FromStr for Hash {
 impl ToString for Hash {
     fn to_string(&self) -> String {
         format!("{:016x}", self.hash)
+    }
+}
+
+impl SourceList {
+    pub fn new() -> Self {
+        SourceList {
+            sources: Vec::new(),
+        }
+    }
+
+    pub fn new_with_sources(sources: Vec<Source>) -> Self {
+        SourceList { sources }
+    }
+
+    pub fn prepend_source(&mut self, source: Source) {
+        self.sources.insert(0, source);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.sources.is_empty()
+    }
+
+    pub fn hash(&self) -> Option<u64> {
+        if self.sources.iter().any(|source| source.hash().is_none()) {
+            return None;
+        }
+
+        let hashes: Vec<u64> = self
+            .sources
+            .iter()
+            .map(|source| source.hash().unwrap())
+            .collect();
+
+        let mut hasher = Blake2bVar::new(8).expect("bad hasher output size");
+        for hash in hashes {
+            hasher.update(&hash.to_ne_bytes());
+            hasher.update(FILE_SEPARATOR.as_bytes());
+        }
+
+        let mut buf = [0u8; 8];
+        hasher.finalize_variable(&mut buf).unwrap();
+
+        Some(u64::from_ne_bytes(buf))
+    }
+
+    pub fn consume(self) -> Vec<Source> {
+        self.sources
     }
 }
 
@@ -152,6 +206,6 @@ mod tests {
         let a = source.hash();
         let b = source.hash();
 
-        (a.is_err() && b.is_err()) || (a.is_ok() && b.is_ok() && a.unwrap() == b.unwrap())
+        (a.is_none() && b.is_none()) || (a.is_some() && b.is_some() && a.unwrap() == b.unwrap())
     }
 }

@@ -1,4 +1,4 @@
-use crate::hash::Source;
+use crate::hash::{Source, SourceList};
 use crate::shadowenv::Shadowenv;
 use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
@@ -78,9 +78,9 @@ fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
 }
 
 impl ShadowLang {
-    pub fn run_programs(shadowenv: Shadowenv, sources: Vec<Source>) -> Result<Shadowenv, Error> {
+    pub fn run_programs(shadowenv: Shadowenv, sources: SourceList) -> Result<Shadowenv, Error> {
         let wrapper = Rc::new(ShadowenvWrapper::new(shadowenv));
-        for source in sources {
+        for source in sources.consume() {
             Self::run(&wrapper, source)?;
         }
         let result = Rc::try_unwrap(wrapper).unwrap().into_inner();
@@ -343,7 +343,8 @@ mod tests {
             "#,
         );
 
-        let result = ShadowLang::run_programs(shadowenv, vec![source]);
+        let result =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["VAL_A"].as_ref().unwrap(), "42");
@@ -366,7 +367,8 @@ mod tests {
             "#,
         );
 
-        let result = ShadowLang::run_programs(shadowenv, vec![source]);
+        let result =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["PATH_A"].as_ref().unwrap(), "/path3:/path1:/path2");
@@ -391,7 +393,8 @@ mod tests {
             "#,
         );
 
-        let result = ShadowLang::run_programs(shadowenv, vec![source]);
+        let result =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["PATH"].as_ref().unwrap(), "/something_else");
@@ -407,7 +410,9 @@ mod tests {
             "#,
         );
 
-        let shadowenv = ShadowLang::run_programs(shadowenv, vec![source]).unwrap();
+        let shadowenv =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
+                .unwrap();
         let expected = HashSet::from([Feature::new("ruby".to_string(), Some("3.1.2".to_string()))]);
         assert_eq!(shadowenv.features(), expected);
     }
@@ -422,7 +427,9 @@ mod tests {
             "#,
         );
         let home = dirs::home_dir().map(|p| p.into_os_string().into_string().unwrap());
-        let shadowenv = ShadowLang::run_programs(shadowenv, vec![source]).unwrap();
+        let shadowenv =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
+                .unwrap();
         assert_eq!(shadowenv.get("EXPANDED"), home);
     }
 }

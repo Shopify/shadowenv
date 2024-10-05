@@ -1,5 +1,5 @@
 use crate::{
-    hash::{Hash, Source},
+    hash::{Hash, SourceList},
     lang, loader, output,
     shadowenv::Shadowenv,
     trust, undo,
@@ -68,9 +68,9 @@ pub fn load_env(
     };
 
     // "targets" are sources of shadowenv lisp files
-    let targets: Option<Vec<Source>> = load_trusted_sources(pathbuf)?;
+    let targets = load_trusted_sources(pathbuf)?;
 
-    let targets_hash = hash_sources(&targets);
+    let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
 
     // before we had multiple targets, this ensured we only act if we needed to
     match (&active, &targets) {
@@ -81,7 +81,7 @@ pub fn load_env(
         // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
         // unless the force flag was specified
         // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
-        (Some(a), Some(t)) if a.hash == targets_hash.unwrap() && !force => {
+        (Some(a), Some(_)) if a.hash == targets_hash.unwrap() && !force => {
             return Ok(None);
         }
         (_, _) => (),
@@ -115,13 +115,13 @@ pub fn load_env(
 }
 
 /// Load all Sources from the current dir, ensuring that they are all trusted.
-fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<Vec<Source>>, Error> {
+fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<SourceList>, Error> {
     let roots = loader::find_roots(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)?;
     if roots.is_empty() {
         return Ok(None);
     }
 
-    let mut sources: Vec<Source> = Vec::new();
+    let mut source_list = SourceList::new();
     for root in roots {
         if !trust::is_dir_tree_trusted(&root)? {
             return Err(trust::NotTrusted {
@@ -132,20 +132,15 @@ fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<Vec<Source>>, Error> 
         let source = loader::load(root)?;
         if let Some(source) = source {
             // stack would be more efficient
-            sources.insert(0, source);
+            source_list.prepend_source(source);
         }
     }
 
-    if sources.is_empty() {
+    if source_list.is_empty() {
         return Ok(None);
     }
 
-    return Ok(Some(sources));
-}
-
-fn hash_sources(sources: &Option<Vec<Source>>) -> Option<u64> {
-    // TODO: actually hash
-    unimplemented!();
+    Ok(Some(source_list))
 }
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
