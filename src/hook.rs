@@ -2,7 +2,8 @@ use crate::{
     hash::{Hash, SourceList},
     lang, loader, output,
     shadowenv::Shadowenv,
-    trust, undo,
+    trust::ensure_dir_tree_trusted,
+    undo,
 };
 use anyhow::Error;
 use serde_derive::Serialize;
@@ -135,12 +136,7 @@ fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<SourceList>, Error> {
         return Ok(None);
     }
 
-    if !trust::is_dir_tree_trusted(&roots)? {
-        return Err(trust::NotTrusted {
-            not_trusted_dir_path: pathbuf.to_string_lossy().to_string(),
-        }
-        .into());
-    }
+    ensure_dir_tree_trusted(&roots)?;
 
     let mut source_list = SourceList::new();
     for root in roots {

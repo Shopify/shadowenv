@@ -5,6 +5,7 @@ use blake2::{
 };
 use std::{
     cmp::{Ord, Ordering},
+    collections::VecDeque,
     fmt::Display,
     path::PathBuf,
     result::Result,
@@ -17,7 +18,7 @@ const GROUP_SEPARATOR: &str = "\x1D";
 
 #[derive(Debug, Clone)]
 pub struct SourceList {
-    sources: Vec<Source>,
+    sources: VecDeque<Source>,
 }
 
 #[derive(Debug, Clone)]
@@ -113,16 +114,19 @@ impl Display for Hash {
 impl SourceList {
     pub fn new() -> Self {
         SourceList {
-            sources: Vec::new(),
+            sources: VecDeque::new(),
         }
     }
 
+    #[cfg(test)]
     pub fn new_with_sources(sources: Vec<Source>) -> Self {
-        SourceList { sources }
+        SourceList {
+            sources: sources.into(),
+        }
     }
 
     pub fn prepend_source(&mut self, source: Source) {
-        self.sources.insert(0, source);
+        self.sources.push_front(source);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -153,7 +157,7 @@ impl SourceList {
     }
 
     pub fn consume(self) -> Vec<Source> {
-        self.sources
+        self.sources.into()
     }
 
     pub fn shortened_dirs(&self) -> Vec<PathBuf> {

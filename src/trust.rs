@@ -6,6 +6,7 @@ use std::{
     convert::TryInto,
     env,
     ffi::OsString,
+    fmt::Display,
     fs::{self, File, OpenOptions},
     io::{prelude::*, ErrorKind},
     path::{Path, PathBuf},
@@ -17,24 +18,41 @@ use thiserror::Error as ThisError;
 pub struct NoShadowenv;
 
 #[derive(ThisError, Debug)]
-#[error(
-    "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
-    not_trusted_dir_path
-)]
 pub struct NotTrusted {
-    pub not_trusted_dir_path: String,
+    pub untrusted_directories: Vec<String>,
 }
 
-pub fn is_dir_tree_trusted(roots: &Vec<PathBuf>) -> Result<bool, Error> {
-    let signer = load_or_generate_signer().unwrap();
+impl Display for NotTrusted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.untrusted_directories.as_slice() {
+            [single] => write!(f, "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", single)?,
+            multi => {
+                write!(f, "The following directories contain untrusted shadowenv programs (see `shadowenv help trust` to learn more):\n{}", multi.join("\n"))?
+            },
+        };
 
+        Ok(())
+    }
+}
+
+pub fn ensure_dir_tree_trusted(roots: &[PathBuf]) -> Result<(), Error> {
+    let signer = load_or_generate_signer()?;
+
+    let mut untrusted = vec![];
     for root in roots {
         if !is_dir_trusted(&signer, root)? {
-            return Ok(false);
+            untrusted.push(root.to_string_lossy().to_string());
         }
     }
 
-    Ok(true)
+    if untrusted.is_empty() {
+        Ok(())
+    } else {
+        Err(NotTrusted {
+            untrusted_directories: untrusted,
+        }
+        .into())
+    }
 }
 
 fn is_dir_trusted(signer: &SigningKey, root: &Path) -> Result<bool, Error> {
@@ -107,28 +125,18 @@ pub fn run() -> Result<(), Error> {
 }
 
 fn trust_dir(signer: &SigningKey, root: PathBuf) -> Result<(), Error> {
-    let d = root.display().to_string();
-    let msg = d.as_bytes();
-    let sig = signer.sign(msg);
+    let msg = root.to_string_lossy();
+    let sig = signer.sign(msg.as_bytes());
 
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let path = trust_file(&root, fingerprint);
-
-    let mut file = match File::create(OsString::from(&path)) {
-        // TODO: error type
-        Err(why) => panic!("couldn't create {:?}: {}", path, why),
-        Ok(file) => file,
-    };
+    let mut file = File::create(&path)?;
 
     write_gitignore(root)?;
 
-    match file.write_all(&sig.to_bytes()) {
-        // TODO: error type
-        Err(why) => panic!("couldn't write to {:?}: {}", path, why),
-        Ok(_) => Ok(()),
-    }
+    Ok(file.write_all(&sig.to_bytes())?)
 }
 
 fn write_gitignore(root: PathBuf) -> Result<(), Error> {
