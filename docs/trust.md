@@ -41,3 +41,17 @@ signature.
 
 This signature will become invalid if you move the directory, and it does resolve symbolic links
 before signing.
+
+## Multiple Shadowenvs in the file path
+Shadowenv loads envs from all ancestors of the current directory. The loading is an all-or-nothing approach:
+- If all envs that lead up to the current directory are trusted, then shadowenv will load everything.
+- If not, then nothing will be loaded.
+
+Shadowenv will let you know which environments are untrusted in the path:
+```
+shadowenv failure: The following directories contain untrusted shadowenv programs (see shadowenv help trust to learn more):
+/path/to/env/a/b/.shadowenv.d
+/path/to/env/a/.shadowenv.d
+```
+
+Note that Shadowenv applies envs from higher up the file system tree first.
