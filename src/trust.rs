@@ -108,7 +108,7 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
     }
 }
 
-/// Trust this directory: create a new signature file.
+/// Trust the closet shadowenv root and create a new signature file.
 pub fn run() -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
@@ -117,14 +117,13 @@ pub fn run() -> Result<(), Error> {
         return Err(NoShadowenv {}.into());
     }
 
-    for root in roots {
-        trust_dir(&signer, root)?
-    }
+    // Unwrap is safe: We're checking `is_empty` above.
+    trust_dir(&signer, roots.last().unwrap())?;
 
     Ok(())
 }
 
-fn trust_dir(signer: &SigningKey, root: PathBuf) -> Result<(), Error> {
+fn trust_dir(signer: &SigningKey, root: &PathBuf) -> Result<(), Error> {
     let msg = root.to_string_lossy();
     let sig = signer.sign(msg.as_bytes());
 
@@ -139,7 +138,7 @@ fn trust_dir(signer: &SigningKey, root: PathBuf) -> Result<(), Error> {
     Ok(file.write_all(&sig.to_bytes())?)
 }
 
-fn write_gitignore(root: PathBuf) -> Result<(), Error> {
+fn write_gitignore(root: &PathBuf) -> Result<(), Error> {
     let path = root.join(".gitignore");
 
     let r: Result<String, Error> = match fs::read_to_string(&path) {
