@@ -10,6 +10,7 @@ pub struct Scalar {
     pub original: Option<String>,
     #[serde(default)]
     pub current: Option<String>,
+    pub no_clobber: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
@@ -43,11 +44,18 @@ impl Data {
         }
     }
 
-    pub fn add_scalar(&mut self, name: String, original: Option<String>, current: Option<String>) {
+    pub fn add_scalar(
+        &mut self,
+        name: String,
+        original: Option<String>,
+        current: Option<String>,
+        no_clobber: bool,
+    ) {
         self.scalars.push(Scalar {
             name,
             original,
             current,
+            no_clobber,
         })
     }
 

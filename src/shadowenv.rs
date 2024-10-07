@@ -13,6 +13,8 @@ pub struct Shadowenv {
     env: HashMap<String, String>,
     /// the outer env, reconstructed by undoing $__shadowenv_data
     unshadowed_env: HashMap<String, String>,
+    // vars that if attempted to be set will be ignored
+    no_clobber: HashSet<String>,
     /// the env inherited from the calling process, untouched.
     initial_env: HashMap<String, String>,
     /// names of variables which are treated as pathlists by the program
@@ -38,11 +40,12 @@ impl Shadowenv {
         target_hash: u64,
         prev_dirs: HashSet<PathBuf>,
     ) -> Shadowenv {
-        let unshadowed_env = Shadowenv::unshadow(&env, shadowenv_data);
+        let (unshadowed_env, no_clobber) = Shadowenv::unshadow(&env, shadowenv_data);
 
         Shadowenv {
             env: unshadowed_env.clone(),
             unshadowed_env,
+            no_clobber,
             initial_env: env,
             lists: HashSet::new(),
             features: HashSet::new(),
@@ -55,13 +58,23 @@ impl Shadowenv {
     fn unshadow(
         env: &HashMap<String, String>,
         shadowenv_data: undo::Data,
-    ) -> HashMap<String, String> {
+    ) -> (HashMap<String, String>, HashSet<String>) {
         let mut result = env.clone();
+        let mut no_clobber = HashSet::new();
         for scalar in shadowenv_data.scalars {
-            if env_get(&result, scalar.name.clone()) == scalar.current {
+            if scalar.no_clobber {
+                no_clobber.insert(scalar.name);
+                continue;
+            }
+
+            let current_value = env_get(&result, scalar.name.clone());
+            if current_value == scalar.current {
                 env_set(&mut result, scalar.name, scalar.original);
+            } else {
+                no_clobber.insert(scalar.name);
             }
         }
+        // TODO: no_clobber for lists
         for list in shadowenv_data.lists {
             for addition in list.additions {
                 env_remove_from_pathlist(&mut result, list.name.clone(), addition);
@@ -71,7 +84,7 @@ impl Shadowenv {
                 env_prepend_to_pathlist(&mut result, list.name.clone(), deletion);
             }
         }
-        result
+        (result, no_clobber)
     }
 
     pub fn shadowenv_data(&self) -> undo::Data {
@@ -102,7 +115,12 @@ impl Shadowenv {
                 data.add_list(varname, additions, deletions);
             } else {
                 let unshadowed_value = self.unshadowed_env.get(&varname).map(|s| s.to_string());
-                data.add_scalar(varname, unshadowed_value, final_value);
+                let mut no_clobber = false;
+                if self.no_clobber.contains(&varname) {
+                    no_clobber = true;
+                }
+
+                data.add_scalar(varname, unshadowed_value, final_value, no_clobber);
             }
         }
         data
@@ -127,6 +145,10 @@ impl Shadowenv {
         );
 
         for varname in varnames {
+            if self.should_not_clobber(&varname) {
+                continue;
+            }
+
             let a = self.env.get(&varname);
             let b = self.initial_env.get(&varname);
             if a != b {
@@ -185,6 +207,10 @@ impl Shadowenv {
         for dir in dirs {
             self.current_dirs.insert(dir);
         }
+    }
+
+    pub fn should_not_clobber(&self, varname: &str) -> bool {
+        self.no_clobber.contains(varname)
     }
 
     fn inform_list(&mut self, a: &str) {
@@ -356,16 +382,19 @@ mod tests {
                     name: "VAR_A".to_string(),
                     original: Some("v0".to_string()),
                     current: Some("v2".to_string()),
+                    no_clobber: false,
                 },
                 Scalar {
                     name: "VAR_B".to_string(),
                     original: Some("v0".to_string()),
                     current: None,
+                    no_clobber: false,
                 },
                 Scalar {
                     name: "VAR_C".to_string(),
                     original: None,
                     current: Some("v3".to_string()),
+                    no_clobber: false,
                 },
             ],
             lists: vec![List {
@@ -375,7 +404,7 @@ mod tests {
             }],
         };
 
-        let expected_formatted_data = r#"00000000075bcd15:[]:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2"},{"name":"VAR_B","original":"v0","current":null},{"name":"VAR_C","original":null,"current":"v3"}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}]}"#;
+        let expected_formatted_data = r#"00000000075bcd15:[]:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}]}"#;
 
         assert_eq!(shadowenv.shadowenv_data(), expected);
 
