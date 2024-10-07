@@ -92,7 +92,7 @@ pub fn app() -> App<'static, 'static> {
         )
         .subcommand(
             SubCommand::with_name("trust")
-                .about("Mark this directory as 'trusted', allowing shadowenv programs to be run.")
+                .about("Mark the closest shadowenv directory as 'trusted', allowing its programs to be run. The closest shadowenv directory is found by traversing the file system upwards, starting at the current directory.")
                 .setting(AppSettings::DisableHelpSubcommand)
         )
         .subcommand(

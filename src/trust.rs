@@ -108,7 +108,7 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
     }
 }
 
-/// Trust the closet shadowenv root and create a new signature file.
+/// Trust the closest parent shadowenv root to the current working dir and create a new signature file.
 pub fn run() -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
@@ -117,12 +117,13 @@ pub fn run() -> Result<(), Error> {
         return Err(NoShadowenv {}.into());
     }
 
+    // `roots`: Closer roots to current dir have lower indices, so we take the first element here.
     // Unwrap is safe: We're checking `is_empty` above.
-    trust_dir(&signer, roots.last().unwrap())?;
-
+    trust_dir(&signer, roots.first().unwrap())?;
     Ok(())
 }
 
+/// Trust the shadowenv dir at `root`. Assumes `root` points to a valid shadowenv directory.
 fn trust_dir(signer: &SigningKey, root: &PathBuf) -> Result<(), Error> {
     let msg = root.to_string_lossy();
     let sig = signer.sign(msg.as_bytes());
