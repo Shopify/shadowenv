@@ -50,52 +50,58 @@ pub fn print_activation_to_tty(
     let in_shadowenv = !current_dirs.is_empty();
     let previously_in_shadowenv = !prev_dirs.is_empty();
 
-    if in_shadowenv {
-        if features.is_empty() {
-            if prev_dirs.is_empty() {
-                eprint!("\x1b[1;34mactivated {} ", SHADOWENV);
-            } else {
-                eprint!("\x1b[1;34mmodified {} ", SHADOWENV);
-            }
-
-            for dir in added_dirs {
-                eprint!("\n\x1b[1;32m+ {} \x1b[0m", dir.display());
-            }
-            for dir in removed_dirs {
-                eprint!("\n\x1b[1;31m- {} \x1b[0m", dir.display());
-            }
+    let status = if in_shadowenv {
+        if previously_in_shadowenv {
+            "modified"
         } else {
-            let feature_list = features
-                .iter()
-                .map(|s| format!("{}", s))
-                .collect::<Vec<String>>()
-                .join(", ");
-            if prev_dirs.is_empty() {
-                eprint!(
-                    "\x1b[1;34mactivated {} \x1b[1;34m({}) ",
-                    SHADOWENV, feature_list
-                );
-            } else {
-                eprint!(
-                    "\x1b[1;34mmodified {} \x1b[1;34m({}) ",
-                    SHADOWENV, feature_list
-                );
-            }
-
-            for dir in added_dirs {
-                eprint!("\n\x1b[1;32m+ {} \x1b[0m", dir.display());
-            }
-            for dir in removed_dirs {
-                eprint!("\n\x1b[1;31m- {} \x1b[0m", dir.display());
-            }
+            "activated"
         }
     } else if previously_in_shadowenv {
-        eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);
-        for dir in removed_dirs {
-            eprint!("\n\x1b[1;31m- {} \x1b[0m", dir.display());
-        }
+        "deactivated"
+    } else {
+        return; // No change, nothing to print
+    };
+
+    let feature_list = if !features.is_empty() {
+        format!(
+            " \x1b[1;34m({})",
+            features
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    } else {
+        String::new()
+    };
+
+    eprintln!(
+        "\x1b[1;34m{}{} {}{}\x1b[0m",
+        status,
+        dir_diff(added_dirs, removed_dirs).unwrap_or_default(),
+        SHADOWENV,
+        feature_list
+    );
+}
+
+fn dir_diff(added_dirs: HashSet<PathBuf>, removed_dirs: HashSet<PathBuf>) -> Option<String> {
+    if added_dirs.is_empty() && removed_dirs.is_empty() {
+        return None;
     }
-    eprintln!("\x1b[0m");
+
+    let mut output = String::with_capacity(added_dirs.len() + removed_dirs.len() + 3);
+    output.push_str("\x1b[1;34m[\x1b[0m");
+
+    output.push_str(&"\x1b[1;32m+\x1b[0m".repeat(added_dirs.len()));
+
+    if !added_dirs.is_empty() && !removed_dirs.is_empty() {
+        output.push_str("\x1b[1;34m|\x1b[0m");
+    }
+
+    output.push_str(&"\x1b[1;31m-\x1b[0m".repeat(removed_dirs.len()));
+
+    output.push_str("\x1b[1;34m]\x1b[0m");
+    Some(output)
 }
 
 fn backticks_to_bright_green(err: Error) -> String {
