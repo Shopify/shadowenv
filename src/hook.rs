@@ -77,7 +77,7 @@ pub fn load_env(
     };
 
     // "targets" are sources of shadowenv lisp files
-    let targets = load_trusted_sources(pathbuf)?;
+    let targets = load_trusted_sources(pathbuf, false)?;
 
     let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
 
@@ -130,13 +130,18 @@ pub fn load_env(
 }
 
 /// Load all Sources from the current dir, ensuring that they are all trusted.
-fn load_trusted_sources(pathbuf: PathBuf) -> Result<Option<SourceList>, Error> {
+fn load_trusted_sources(
+    pathbuf: PathBuf,
+    skip_trust_check: bool,
+) -> Result<Option<SourceList>, Error> {
     let roots = loader::find_roots(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)?;
     if roots.is_empty() {
         return Ok(None);
     }
 
-    ensure_dir_tree_trusted(&roots)?;
+    if !skip_trust_check {
+        ensure_dir_tree_trusted(&roots)?;
+    }
 
     let mut source_list = SourceList::new();
     for root in roots {
@@ -242,8 +247,41 @@ mod tests {
         let temp_dir = tempdir().unwrap().into_path();
         let path = temp_dir.to_string_lossy().to_string();
         fs::create_dir(temp_dir.join(".shadowenv.d")).unwrap();
-        let result = load_trusted_sources(temp_dir);
+        let result = load_trusted_sources(temp_dir, false);
         assert!(result.is_err());
         assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
+    }
+
+    #[test]
+    fn load_trusted_sources_returns_nearest_sources_last() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path();
+
+        // Create test directories and files
+        fs::create_dir_all(base_path.join("dir1/.shadowenv.d")).unwrap();
+        fs::create_dir_all(base_path.join("dir1/dir2/.shadowenv.d")).unwrap();
+        fs::write(
+            base_path.join("dir1/.shadowenv.d/test.lisp"),
+            "(env/set \"ORDER\" \"1\")",
+        )
+        .unwrap();
+        fs::write(
+            base_path.join("dir1/dir2/.shadowenv.d/test.lisp"),
+            "(env/set \"ORDER\" \"2\")",
+        )
+        .unwrap();
+
+        let result = load_trusted_sources(base_path.join("dir1/dir2"), true)
+            .unwrap()
+            .unwrap();
+
+        let sources = result.consume();
+        assert_eq!(sources.len(), 2);
+
+        // Assert that sources are returned in the correct order
+        // The order they are returned is the order they are executed in.
+        // So the outermost env must come first, with the innermost dir coming last.
+        assert!(sources[0].dir.ends_with("dir1"));
+        assert!(sources[1].dir.ends_with("dir1/dir2"));
     }
 }

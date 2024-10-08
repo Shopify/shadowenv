@@ -434,4 +434,29 @@ mod tests {
                 .unwrap();
         assert_eq!(shadowenv.get("EXPANDED"), home);
     }
+
+    #[test]
+    fn test_source_ordering() {
+        let shadowenv = build_shadow_env(vec![]);
+
+        let outer_source = build_source(
+            r#"
+                (env/set "TEST" "ONE")
+            "#,
+        );
+        let inner_source = build_source(
+            r#"
+                (env/set "TEST" "TWO")
+            "#,
+        );
+
+        // Outer source comes first, as shown in test load_trusted_sources_returns_nearest_sources_last
+        // The source that comes last in the input list should be executed last
+        let shadowenv = ShadowLang::run_programs(
+            shadowenv,
+            SourceList::new_with_sources(vec![outer_source, inner_source]),
+        )
+        .unwrap();
+        assert_eq!(shadowenv.get("TEST"), Some("TWO".to_string()));
+    }
 }
