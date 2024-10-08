@@ -94,6 +94,12 @@ pub fn app() -> App<'static, 'static> {
             SubCommand::with_name("trust")
                 .about("Mark the closest shadowenv directory as 'trusted', allowing its programs to be run. The closest shadowenv directory is found by traversing the file system upwards, starting at the current directory.")
                 .setting(AppSettings::DisableHelpSubcommand)
+                .arg(
+                    Arg::with_name("dir")
+                        .long("dir")
+                        .takes_value(true)
+                        .help("Instead of starting the search for a shadowenv to trust in the current directory, begin in this one.")
+                )
         )
         .subcommand(
             SubCommand::with_name("exec")

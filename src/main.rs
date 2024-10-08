@@ -51,8 +51,13 @@ fn main() {
             let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
             process::exit(diff::run(verbose, color, data));
         }
-        ("trust", Some(_)) => {
-            if let Err(err) = trust::run() {
+        ("trust", Some(matches)) => {
+            let dir = matches
+                .value_of("dir")
+                .map(PathBuf::from)
+                .unwrap_or(current_dir);
+
+            if let Err(err) = trust::run(dir) {
                 eprintln!("{}", err); // TODO: better formatting
                 process::exit(1);
             }

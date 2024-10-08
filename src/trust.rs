@@ -109,10 +109,10 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 }
 
 /// Trust the closest parent shadowenv root to the current working dir and create a new signature file.
-pub fn run() -> Result<(), Error> {
+pub fn run(dir: PathBuf) -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let roots = loader::find_roots(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    let roots = loader::find_roots(&dir, loader::DEFAULT_RELATIVE_COMPONENT)?;
     if roots.is_empty() {
         return Err(NoShadowenv {}.into());
     }
