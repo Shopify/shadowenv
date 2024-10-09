@@ -1055,7 +1055,6 @@ dependencies = [
 name = "shadowenv"
 version = "2.1.2"
 dependencies = [
- "atty",
  "blake2",
  "clap",
  "dirs 5.0.1",

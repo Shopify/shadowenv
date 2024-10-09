@@ -1,15 +1,14 @@
-use crate::features::Feature;
-use crate::loader;
-use crate::trust;
-
-use atty::{is, Stream};
+use crate::{features::Feature, loader, trust};
 use failure::{format_err, Error};
 use regex::Regex;
-use std::collections::HashSet;
-use std::env;
-use std::fs::{self, OpenOptions};
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::{
+    collections::HashSet,
+    env,
+    fs::{self, OpenOptions},
+    io::IsTerminal,
+    path::PathBuf,
+    time::{Duration, SystemTime},
+};
 
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
@@ -151,5 +150,6 @@ fn should_print_activation() -> bool {
         },
         Err(_) => configured_to_print = true,
     };
-    return is(Stream::Stderr) && configured_to_print;
+
+    return std::io::stderr().is_terminal() && configured_to_print;
 }

@@ -9,7 +9,6 @@ authors = [
 edition = "2018"
 
 [dependencies]
-atty = "0.2.14"                                                 # Unmaintained, replace with https://doc.rust-lang.org/stable/std/io/trait.IsTerminal.html
 blake2 = "0.10.6"
 clap = "2.32.0"
 dirs = "5.0.1"
