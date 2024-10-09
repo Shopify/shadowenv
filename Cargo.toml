@@ -1,15 +1,19 @@
 [package]
 name = "shadowenv"
 version = "2.1.2"
-authors = ["Burke Libbey <burke@libbey.me>", "Lisa Ugray <lisa.ugray@shopify.com>", "Aaron Olson <aaron.olson@shopify.com>"]
+authors = [
+    "Burke Libbey <burke@libbey.me>",
+    "Lisa Ugray <lisa.ugray@shopify.com>",
+    "Aaron Olson <aaron.olson@shopify.com>",
+]
 edition = "2018"
 
 [build-dependencies]
 clap = "2.32.0"
 
 [dependencies]
-atty = "0.2"
-blake2 = "0.8.0"
+atty = "0.2.14"         # Unmaintained, replace with https://doc.rust-lang.org/stable/std/io/trait.IsTerminal.html
+blake2 = "0.10.6"
 clap = "2.32.0"
 dirs = "1.0.4"
 exec = "0.3.1"

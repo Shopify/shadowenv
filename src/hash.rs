@@ -1,12 +1,14 @@
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use blake2::{
+    digest::{Update, VariableOutput},
+    Blake2bVar,
+};
 use failure::{Error, Fail};
-use std::cmp::Ord;
-use std::cmp::Ordering;
-use std::convert::TryInto;
-use std::result::Result;
-use std::str::FromStr;
-use std::u64;
+use std::{
+    cmp::{Ord, Ordering},
+    result::Result,
+    str::FromStr,
+    u64,
+};
 
 const FILE_SEPARATOR: &str = "\x1C";
 const GROUP_SEPARATOR: &str = "\x1D";
@@ -63,20 +65,20 @@ impl Source {
         if self.files.is_empty() {
             return Ok(0);
         }
-        let mut hasher = VarBlake2b::new(8)?;
-        hasher.input(&self.dir);
-        hasher.input(FILE_SEPARATOR);
+        let mut hasher = Blake2bVar::new(8)?;
+        hasher.update(self.dir.as_bytes());
+        hasher.update(FILE_SEPARATOR.as_bytes());
         for file in self.files.iter() {
-            hasher.input(&file.name);
-            hasher.input(GROUP_SEPARATOR);
-            hasher.input(&file.contents);
-            hasher.input(FILE_SEPARATOR);
+            hasher.update(file.name.as_bytes());
+            hasher.update(GROUP_SEPARATOR.as_bytes());
+            hasher.update(file.contents.as_bytes());
+            hasher.update(FILE_SEPARATOR.as_bytes());
         }
-        let mut sum: u64 = 0;
-        hasher.variable_result(|res| {
-            sum = u64::from_ne_bytes(res.try_into().unwrap());
-        });
-        Ok(sum)
+
+        let mut buf = [0u8; 8];
+        hasher.finalize_variable(&mut buf).unwrap();
+
+        Ok(u64::from_ne_bytes(buf))
     }
 }
 
@@ -104,6 +106,7 @@ mod tests {
     use quickcheck::Arbitrary;
     use quickcheck::Gen;
     use quickcheck_macros::quickcheck;
+
     #[test]
     fn test_key_encoding() {
         let key = Hash { hash: 2 };
