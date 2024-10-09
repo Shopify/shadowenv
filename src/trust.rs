@@ -1,8 +1,9 @@
 use crate::loader;
-use ed25519_dalek::{Keypair, Signature, Signer};
+use ed25519_dalek::{Signature, Signer, SigningKey};
 use failure::{Error, Fail};
 use rand::rngs::OsRng;
 use std::{
+    convert::TryInto,
     env,
     ffi::OsString,
     fs::{self, File, OpenOptions},
@@ -31,7 +32,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
         Some(r) => r,
     };
 
-    let pubkey = signer.public;
+    let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let d = root.display().to_string();
@@ -47,13 +48,13 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
     match r_o_bytes? {
         None => Ok(false),
         Some(bytes) => {
-            let sig = Signature::from_bytes(&bytes).unwrap();
+            let sig = Signature::from_bytes(&bytes.try_into().unwrap());
             Ok(signer.verify(msg, &sig).is_ok())
         }
     }
 }
 
-fn load_or_generate_signer() -> Result<Keypair, Error> {
+fn load_or_generate_signer() -> Result<SigningKey, Error> {
     let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME")?);
 
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(&path)) {
@@ -63,12 +64,13 @@ fn load_or_generate_signer() -> Result<Keypair, Error> {
     };
     match r_o_bytes? {
         Some(bytes) => {
-            let seed = Keypair::from_bytes(&bytes)?;
-            Ok(seed)
+            let key = SigningKey::from_keypair_bytes(&bytes.try_into().unwrap())?;
+            Ok(key)
         }
         None => {
             let mut csprng = OsRng {};
-            let seed = Keypair::generate(&mut csprng);
+            let seed = SigningKey::generate(&mut csprng);
+
             fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
             let mut file = match File::create(OsString::from(&path)) {
                 // TODO: error type
@@ -77,7 +79,6 @@ fn load_or_generate_signer() -> Result<Keypair, Error> {
             };
 
             file.write(&seed.to_bytes())?;
-
             Ok(seed)
         }
     }
@@ -96,7 +97,7 @@ pub fn run() -> Result<(), Error> {
     let msg = d.as_bytes();
     let sig = signer.sign(msg);
 
-    let pubkey = signer.public;
+    let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let path = trust_file(&root, fingerprint);
