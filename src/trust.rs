@@ -1,6 +1,6 @@
 use crate::loader;
+use anyhow::Error;
 use ed25519_dalek::{Signature, Signer, SigningKey};
-use failure::{Error, Fail};
 use rand::rngs::OsRng;
 use std::{
     convert::TryInto,
@@ -10,14 +10,15 @@ use std::{
     io::{prelude::*, ErrorKind},
     path::{Path, PathBuf},
 };
+use thiserror::Error as ThisError;
 
-#[derive(Fail, Debug)]
-#[fail(display = "no shadowenv found")]
+#[derive(ThisError, Debug)]
+#[error("no shadowenv found")]
 pub struct NoShadowenv;
 
-#[derive(Fail, Debug)]
-#[fail(
-    display = "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
+#[derive(ThisError, Debug)]
+#[error(
+    "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
     not_trusted_dir_path
 )]
 pub struct NotTrusted {

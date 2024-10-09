@@ -1,10 +1,6 @@
 use crate::hash::Source;
-
-use std::fs;
-use std::io::ErrorKind;
-use std::path::PathBuf;
-
-use failure::Error;
+use anyhow::Error;
+use std::{fs, io::ErrorKind, path::PathBuf};
 
 pub const DEFAULT_RELATIVE_COMPONENT: &str = ".shadowenv.d";
 

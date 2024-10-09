@@ -1,5 +1,5 @@
 use crate::{features::Feature, loader, trust};
-use failure::{format_err, Error};
+use anyhow::{anyhow, Error};
 use regex::Regex;
 use std::{
     collections::HashSet,
@@ -72,12 +72,11 @@ fn backticks_to_bright_green(err: Error) -> String {
 fn check_and_trigger_cooldown(err: &Error, shellpid: u32) -> Result<bool, Error> {
     // if no .shadowenv.d, then Err(_) just means no cooldown: always display error.
     let root = loader::find_root(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?
-        .ok_or_else(|| format_err!("no .shadowenv.d"))?;
+        .ok_or_else(|| anyhow!("no .shadowenv.d"))?;
 
     let _ = clean_up_stale_errors(&root, Duration::new(300, 0));
 
-    let errindex =
-        cooldown_index(err).ok_or_else(|| format_err!("error not subject to cooldown"))?;
+    let errindex = cooldown_index(err).ok_or_else(|| anyhow!("error not subject to cooldown"))?;
 
     let errfilepath = err_file(&root, errindex, shellpid)?;
 

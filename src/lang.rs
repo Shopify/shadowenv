@@ -1,20 +1,19 @@
 use crate::hash::Source;
 use crate::shadowenv::Shadowenv;
-use ketos_derive::{ForeignValue, FromValueRef};
-
-use failure::Fail;
 use ketos::{Context, Error, FromValueRef, Name, Value};
-use std::cell::{Ref, RefCell};
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::rc::Rc;
+use ketos_derive::{ForeignValue, FromValueRef};
+use std::{
+    cell::{Ref, RefCell},
+    env, fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
+use thiserror::Error;
 
 pub struct ShadowLang {}
 
-#[derive(Fail, Debug)]
-#[fail(display = "error while evaluating shadowlisp")]
+#[derive(Debug, Error)]
+#[error("error while evaluating shadowlisp")]
 pub struct ShadowlispError;
 
 macro_rules! ketos_fn2 {

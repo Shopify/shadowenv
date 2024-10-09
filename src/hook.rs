@@ -1,21 +1,14 @@
-use crate::hash::{Hash, Source};
-use crate::lang;
-use crate::loader;
-use crate::output;
-use crate::shadowenv::Shadowenv;
-use crate::trust;
-use crate::undo;
+use crate::{
+    hash::{Hash, Source},
+    lang, loader, output,
+    shadowenv::Shadowenv,
+    trust, undo,
+};
+use anyhow::Error;
 use serde_derive::Serialize;
-
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::env;
-use std::path::PathBuf;
-use std::result::Result;
-use std::str::FromStr;
+use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
 
 use crate::lang::ShadowLang;
-use failure::Error;
 use shell_escape as shell;
 
 pub enum VariableOutputMode {

@@ -1,8 +1,8 @@
+use anyhow::Error;
 use blake2::{
     digest::{Update, VariableOutput},
     Blake2bVar,
 };
-use failure::{Error, Fail};
 use std::{
     cmp::{Ord, Ordering},
     result::Result,
@@ -48,8 +48,8 @@ pub struct Hash {
     pub hash: u64,
 }
 
-#[derive(Fail, Debug)]
-#[fail(display = "wrong input size")]
+#[derive(Debug, thiserror::Error)]
+#[error("wrong input size")]
 struct WrongInputSize;
 
 impl Source {

@@ -1,10 +1,10 @@
-use failure::Error;
+use anyhow::Error;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::env;
-
-use crate::features::Feature;
-use crate::undo;
+use crate::{features::Feature, undo};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    env,
+};
 
 #[derive(Debug)]
 pub struct Shadowenv {
