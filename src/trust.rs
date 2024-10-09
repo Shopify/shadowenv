@@ -1,15 +1,14 @@
 use crate::loader;
-
-use ed25519_dalek::Keypair;
-use ed25519_dalek::{Signature, Signer};
+use ed25519_dalek::{Keypair, Signature, Signer};
 use failure::{Error, Fail};
 use rand::rngs::OsRng;
-use std::env;
-use std::ffi::OsString;
-use std::fs::OpenOptions;
-use std::fs::{self, File};
-use std::io::{prelude::*, ErrorKind};
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    ffi::OsString,
+    fs::{self, File, OpenOptions},
+    io::{prelude::*, ErrorKind},
+    path::{Path, PathBuf},
+};
 
 #[derive(Fail, Debug)]
 #[fail(display = "no shadowenv found")]
@@ -48,7 +47,7 @@ pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
     match r_o_bytes? {
         None => Ok(false),
         Some(bytes) => {
-            let sig = Signature::new(from_vec(bytes));
+            let sig = Signature::from_bytes(&bytes).unwrap();
             Ok(signer.verify(msg, &sig).is_ok())
         }
     }
@@ -115,14 +114,6 @@ pub fn run() -> Result<(), Error> {
         Err(why) => panic!("couldn't write to {:?}: {}", path, why),
         Ok(_) => Ok(()),
     }
-}
-
-fn from_vec(vec: Vec<u8>) -> [u8; 64] {
-    let bytes: &[u8] = &vec;
-    let mut array = [0; 64];
-    let bytes = &bytes[..array.len()]; // panics if not enough data
-    array.copy_from_slice(bytes);
-    array
 }
 
 fn write_gitignore(root: PathBuf) -> Result<(), Error> {
