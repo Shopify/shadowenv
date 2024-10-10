@@ -1,33 +1,37 @@
 [package]
 name = "shadowenv"
 version = "2.1.2"
-authors = ["Burke Libbey <burke@libbey.me>", "Lisa Ugray <lisa.ugray@shopify.com>", "Aaron Olson <aaron.olson@shopify.com>"]
+authors = [
+    "Burke Libbey <burke@libbey.me>",
+    "Lisa Ugray <lisa.ugray@shopify.com>",
+    "Aaron Olson <aaron.olson@shopify.com>",
+]
 edition = "2018"
+
+[dependencies]
+blake2 = "0.10.6"
+clap = "2.32.0"
+dirs = "5.0.1"
+exec = "0.3.1"
+failure = "0.1.5"
+hex = "0.4.3"
+ketos = "0.12"
+ketos_derive = "0.12"
+libc = "0.2.48"
+regex = "1.11.0"
+serde = "1.0.210"
+serde_derive = "1.0.210"
+serde_json = "1.0.128"
+shell-escape = "0.1.4"
+shellexpand = "3.1.0"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+ed25519 = "2.2.3"
+rand = "0.8.5"
 
 [build-dependencies]
 clap = "2.32.0"
 
-[dependencies]
-atty = "0.2"
-blake2 = "0.8.0"
-clap = "2.32.0"
-dirs = "1.0.4"
-exec = "0.3.1"
-failure = "0.1.5"
-hex = "0.3.2"
-ketos = "0.11"
-ketos_derive = "0.11"
-libc = "0.2.48"
-regex = "1.5.5"
-serde = "1.0.85"
-serde_derive = "1.0.85"
-serde_json = "1.0.40"
-shell-escape = "0.1.4"
-shellexpand = "1.0.0"
-ed25519-dalek = "1.0.1"
-ed25519 = "1.1.1"
-rand = "0.7"
 [dev-dependencies]
 quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
-tempfile = "3.3.0"
+tempfile = "3.13.0"
