@@ -1,5 +1,5 @@
 use crate::hook;
-use failure::Error;
+use anyhow::Error;
 use std::path::PathBuf;
 use std::vec::Vec;
 

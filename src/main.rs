@@ -12,13 +12,9 @@ mod shadowenv;
 mod trust;
 mod undo;
 
-use crate::shadowenv::Shadowenv;
-use failure::format_err;
-use std::env;
-use std::path::PathBuf;
-use std::process;
-
-use crate::hook::VariableOutputMode;
+use crate::{hook::VariableOutputMode, shadowenv::Shadowenv};
+use anyhow::{anyhow, Error};
+use std::{env, path::PathBuf, process};
 
 fn main() {
     let current_dir = match env::current_dir() {
@@ -98,11 +94,11 @@ fn determine_shellpid_or_crash(arg: Option<&str>) -> u32 {
     }
 }
 
-fn unsafe_getppid() -> Result<u32, failure::Error> {
+fn unsafe_getppid() -> Result<u32, Error> {
     let ppid;
     unsafe { ppid = libc::getppid() }
     if ppid < 1 {
-        return Err(format_err!("somehow failed to get ppid"));
+        return Err(anyhow!("somehow failed to get ppid"));
     }
     Ok(ppid as u32)
 }
