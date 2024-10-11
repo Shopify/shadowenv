@@ -134,6 +134,9 @@ fn load_trusted_sources(
     pathbuf: PathBuf,
     skip_trust_check: bool,
 ) -> Result<Option<SourceList>, Error> {
+    #[cfg(not(test))]
+    assert!(!skip_trust_check);
+
     let roots = loader::find_roots(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)?;
     if roots.is_empty() {
         return Ok(None);
