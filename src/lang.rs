@@ -332,7 +332,7 @@ mod tests {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect::<HashMap<_, _>>();
-        Shadowenv::new(env, Data::new(), 0, HashSet::new())
+        Shadowenv::new(env, Data::new(), 0)
     }
 
     #[test]

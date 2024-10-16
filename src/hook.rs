@@ -1,23 +1,15 @@
 use crate::{
     hash::{Hash, SourceList},
-    lang, loader, output,
+    lang::{self, ShadowLang},
+    loader, output,
     shadowenv::Shadowenv,
     trust::ensure_dir_tree_trusted,
     undo,
 };
 use anyhow::Error;
 use serde_derive::Serialize;
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-    env,
-    path::PathBuf,
-    result::Result,
-    str::FromStr,
-};
-
-use crate::lang::ShadowLang;
 use shell_escape as shell;
+use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
 
 pub enum VariableOutputMode {
     FishMode,
@@ -64,9 +56,8 @@ pub fn load_env(
     shadowenv_data: String,
     force: bool,
 ) -> Result<Option<Shadowenv>, Error> {
-    let mut parts = shadowenv_data.splitn(3, ":");
+    let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
-    let prev_dirs = parts.next().unwrap_or("[]");
     let json_data = parts.next().unwrap_or("{}");
 
     let active: Option<Hash> = match prev_hash {
@@ -105,13 +96,7 @@ pub fn load_env(
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let prev_dirs: HashSet<PathBuf> = serde_json::from_str(prev_dirs)?;
-    let shadowenv = Shadowenv::new(
-        env::vars().collect(),
-        data,
-        targets_hash.unwrap_or(0),
-        prev_dirs,
-    );
+    let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
 
     match targets {
         Some(targets) => {

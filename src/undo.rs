@@ -1,6 +1,6 @@
 use anyhow::Error;
 use serde_derive::{Deserialize, Serialize};
-use std::result::Result;
+use std::{collections::HashSet, path::PathBuf, result::Result};
 
 #[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Scalar {
@@ -29,6 +29,8 @@ pub struct Data {
     pub scalars: Vec<Scalar>,
     #[serde(default)]
     pub lists: Vec<List>,
+    #[serde(default)]
+    pub prev_dirs: HashSet<PathBuf>,
 }
 
 impl Data {
@@ -41,6 +43,7 @@ impl Data {
         Data {
             scalars: vec![],
             lists: vec![],
+            prev_dirs: HashSet::new(),
         }
     }
 
