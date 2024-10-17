@@ -232,12 +232,12 @@ mod tests {
     use tempfile::tempdir;
     #[test]
     fn load_trusted_source_returns_an_error_for_untrusted_folders() {
-        let temp_dir = tempdir().unwrap().into_path();
-        let path = temp_dir.to_string_lossy().to_string();
-        fs::create_dir(temp_dir.join(".shadowenv.d")).unwrap();
-        let result = load_trusted_sources(temp_dir, false);
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join(".shadowenv.d");
+        fs::create_dir(&path).unwrap();
+        let result = load_trusted_sources(path.clone(), false);
         assert!(result.is_err());
-        assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
+        assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path.canonicalize().unwrap().to_string_lossy()), result.err().unwrap().to_string())
     }
 
     #[test]
