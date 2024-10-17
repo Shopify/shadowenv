@@ -4,6 +4,7 @@ use crate::{features::Feature, undo};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env,
+    path::PathBuf,
 };
 
 #[derive(Debug)]
@@ -12,6 +13,8 @@ pub struct Shadowenv {
     env: HashMap<String, String>,
     /// the outer env, reconstructed by undoing $__shadowenv_data
     unshadowed_env: HashMap<String, String>,
+    // vars that if attempted to be set will be ignored
+    no_clobber: HashSet<String>,
     /// the env inherited from the calling process, untouched.
     initial_env: HashMap<String, String>,
     /// names of variables which are treated as pathlists by the program
@@ -19,13 +22,15 @@ pub struct Shadowenv {
     /// list of features provided by all plugins
     features: HashSet<Feature>,
     target_hash: u64,
+    prev_dirs: HashSet<PathBuf>,
+    current_dirs: HashSet<PathBuf>,
 }
 
 impl Shadowenv {
     pub fn load_shadowenv_data_or_legacy_fallback(fallback_data: Option<String>) -> String {
         match env::var("__shadowenv_data") {
             Ok(priority_data) => priority_data,
-            Err(_) => fallback_data.unwrap_or_else(|| "".to_string()),
+            Err(_) => fallback_data.unwrap_or_default(),
         }
     }
 
@@ -34,28 +39,41 @@ impl Shadowenv {
         shadowenv_data: undo::Data,
         target_hash: u64,
     ) -> Shadowenv {
-        let unshadowed_env = Shadowenv::unshadow(&env, shadowenv_data);
+        let (unshadowed_env, no_clobber, prev_dirs) = Shadowenv::unshadow(&env, shadowenv_data);
 
         Shadowenv {
             env: unshadowed_env.clone(),
             unshadowed_env,
+            no_clobber,
             initial_env: env,
             lists: HashSet::new(),
             features: HashSet::new(),
             target_hash,
+            prev_dirs,
+            current_dirs: HashSet::new(),
         }
     }
 
     fn unshadow(
         env: &HashMap<String, String>,
         shadowenv_data: undo::Data,
-    ) -> HashMap<String, String> {
+    ) -> (HashMap<String, String>, HashSet<String>, HashSet<PathBuf>) {
         let mut result = env.clone();
+        let mut no_clobber = HashSet::new();
         for scalar in shadowenv_data.scalars {
-            if env_get(&result, scalar.name.clone()) == scalar.current {
+            if scalar.no_clobber {
+                no_clobber.insert(scalar.name);
+                continue;
+            }
+
+            let current_value = env_get(&result, scalar.name.clone());
+            if current_value == scalar.current {
                 env_set(&mut result, scalar.name, scalar.original);
+            } else {
+                no_clobber.insert(scalar.name);
             }
         }
+        // TODO: no_clobber for lists
         for list in shadowenv_data.lists {
             for addition in list.additions {
                 env_remove_from_pathlist(&mut result, list.name.clone(), addition);
@@ -65,7 +83,7 @@ impl Shadowenv {
                 env_prepend_to_pathlist(&mut result, list.name.clone(), deletion);
             }
         }
-        result
+        (result, no_clobber, shadowenv_data.prev_dirs)
     }
 
     pub fn shadowenv_data(&self) -> undo::Data {
@@ -96,15 +114,22 @@ impl Shadowenv {
                 data.add_list(varname, additions, deletions);
             } else {
                 let unshadowed_value = self.unshadowed_env.get(&varname).map(|s| s.to_string());
-                data.add_scalar(varname, unshadowed_value, final_value);
+                let mut no_clobber = false;
+                if self.no_clobber.contains(&varname) {
+                    no_clobber = true;
+                }
+
+                data.add_scalar(varname, unshadowed_value, final_value, no_clobber);
             }
         }
+        data.prev_dirs = self.current_dirs.clone();
+
         data
     }
 
     fn format_shadowenv_data(&self) -> Result<String, Error> {
         let d = self.shadowenv_data();
-        Ok(format!("{:016x}:", self.target_hash) + &serde_json::to_string(&d)?)
+        Ok(format!("{:016x}:", self.target_hash,) + &serde_json::to_string(&d)?)
     }
 
     pub fn exports(&self) -> Result<HashMap<String, Option<String>>, Error> {
@@ -117,6 +142,10 @@ impl Shadowenv {
         );
 
         for varname in varnames {
+            if self.should_not_clobber(&varname) {
+                continue;
+            }
+
             let a = self.env.get(&varname);
             let b = self.initial_env.get(&varname);
             if a != b {
@@ -161,6 +190,24 @@ impl Shadowenv {
 
     pub fn features(&self) -> HashSet<Feature> {
         self.features.iter().cloned().collect()
+    }
+
+    pub fn current_dirs(&self) -> HashSet<PathBuf> {
+        self.current_dirs.iter().cloned().collect()
+    }
+
+    pub fn prev_dirs(&self) -> HashSet<PathBuf> {
+        self.prev_dirs.iter().cloned().collect()
+    }
+
+    pub fn add_dirs(&mut self, dirs: Vec<PathBuf>) {
+        for dir in dirs {
+            self.current_dirs.insert(dir);
+        }
+    }
+
+    pub fn should_not_clobber(&self, varname: &str) -> bool {
+        self.no_clobber.contains(varname)
     }
 
     fn inform_list(&mut self, a: &str) {
@@ -261,13 +308,13 @@ fn diff_vecs(oldvec: Vec<&str>, newvec: Vec<&str>) -> (Vec<String>, Vec<String>)
     }
 
     for oldval in oldvec {
-        if !newset.contains(&oldval.to_string()) {
+        if !newset.contains(oldval) {
             deletions.push(oldval.to_string());
         }
     }
 
     for newval in newvec {
-        if !oldset.contains(&newval.to_string()) {
+        if !oldset.contains(newval) {
             additions.push(newval.to_string());
         }
     }
@@ -327,16 +374,19 @@ mod tests {
                     name: "VAR_A".to_string(),
                     original: Some("v0".to_string()),
                     current: Some("v2".to_string()),
+                    no_clobber: false,
                 },
                 Scalar {
                     name: "VAR_B".to_string(),
                     original: Some("v0".to_string()),
                     current: None,
+                    no_clobber: false,
                 },
                 Scalar {
                     name: "VAR_C".to_string(),
                     original: None,
                     current: Some("v3".to_string()),
+                    no_clobber: false,
                 },
             ],
             lists: vec![List {
@@ -344,9 +394,10 @@ mod tests {
                 additions: vec!["/path4".to_string(), "/path3".to_string()],
                 deletions: vec!["/path1".to_string()],
             }],
+            prev_dirs: Default::default(),
         };
 
-        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2"},{"name":"VAR_B","original":"v0","current":null},{"name":"VAR_C","original":null,"current":"v3"}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}]}"#;
+        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}],"prev_dirs":[]}"#;
 
         assert_eq!(shadowenv.shadowenv_data(), expected);
 
