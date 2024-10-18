@@ -6,6 +6,7 @@ use std::{
     convert::TryInto,
     env,
     ffi::OsString,
+    fmt::Display,
     fs::{self, File, OpenOptions},
     io::{prelude::*, ErrorKind},
     path::{Path, PathBuf},
@@ -17,29 +18,51 @@ use thiserror::Error as ThisError;
 pub struct NoShadowenv;
 
 #[derive(ThisError, Debug)]
-#[error(
-    "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.",
-    not_trusted_dir_path
-)]
 pub struct NotTrusted {
-    pub not_trusted_dir_path: String,
+    pub untrusted_directories: Vec<String>,
 }
 
-pub fn is_dir_trusted(dir: &PathBuf) -> Result<bool, Error> {
-    let signer = load_or_generate_signer().unwrap();
+impl Display for NotTrusted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.untrusted_directories.as_slice() {
+            [single] => write!(f, "directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", single)?,
+            multi => {
+                write!(f, "The following directories contain untrusted shadowenv programs (see `shadowenv help trust` to learn more):\n{}", multi.join("\n"))?
+            },
+        };
 
-    let root = match loader::find_root(&dir.to_path_buf(), loader::DEFAULT_RELATIVE_COMPONENT)? {
-        None => return Err(NoShadowenv {}.into()),
-        Some(r) => r,
-    };
+        Ok(())
+    }
+}
 
+pub fn ensure_dir_tree_trusted(roots: &[PathBuf]) -> Result<(), Error> {
+    let signer = load_or_generate_signer()?;
+
+    let mut untrusted = vec![];
+    for root in roots {
+        if !is_dir_trusted(&signer, root)? {
+            untrusted.push(root.to_string_lossy().to_string());
+        }
+    }
+
+    if untrusted.is_empty() {
+        Ok(())
+    } else {
+        Err(NotTrusted {
+            untrusted_directories: untrusted,
+        }
+        .into())
+    }
+}
+
+fn is_dir_trusted(signer: &SigningKey, root: &Path) -> Result<bool, Error> {
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let d = root.display().to_string();
     let msg = d.as_bytes();
 
-    let path = trust_file(&root, fingerprint);
+    let path = trust_file(root, fingerprint);
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
@@ -79,46 +102,44 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
                 Ok(f) => f,
             };
 
-            file.write(&seed.to_bytes())?;
+            file.write_all(&seed.to_bytes())?;
             Ok(seed)
         }
     }
 }
 
-/// Trust this directory: create a new signature file.
-pub fn run() -> Result<(), Error> {
+/// Trust the closest parent shadowenv root to the current working dir and create a new signature file.
+pub fn run(dir: PathBuf) -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let root = match loader::find_root(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)? {
-        None => return Err(NoShadowenv {}.into()),
-        Some(r) => r,
-    };
+    let roots = loader::find_roots(&dir, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    if roots.is_empty() {
+        return Err(NoShadowenv {}.into());
+    }
 
-    let d = root.display().to_string();
-    let msg = d.as_bytes();
-    let sig = signer.sign(msg);
+    // `roots`: Closer roots to current dir have lower indices, so we take the first element here.
+    // Unwrap is safe: We're checking `is_empty` above.
+    trust_dir(&signer, roots.first().unwrap())?;
+    Ok(())
+}
+
+/// Trust the shadowenv dir at `root`. Assumes `root` points to a valid shadowenv directory.
+fn trust_dir(signer: &SigningKey, root: &PathBuf) -> Result<(), Error> {
+    let msg = root.to_string_lossy();
+    let sig = signer.sign(msg.as_bytes());
 
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
     let path = trust_file(&root, fingerprint);
-
-    let mut file = match File::create(OsString::from(&path)) {
-        // TODO: error type
-        Err(why) => panic!("couldn't create {:?}: {}", path, why),
-        Ok(file) => file,
-    };
+    let mut file = File::create(&path)?;
 
     write_gitignore(root)?;
 
-    match file.write_all(&sig.to_bytes()) {
-        // TODO: error type
-        Err(why) => panic!("couldn't write to {:?}: {}", path, why),
-        Ok(_) => Ok(()),
-    }
+    Ok(file.write_all(&sig.to_bytes())?)
 }
 
-fn write_gitignore(root: PathBuf) -> Result<(), Error> {
+fn write_gitignore(root: &PathBuf) -> Result<(), Error> {
     let path = root.join(".gitignore");
 
     let r: Result<String, Error> = match fs::read_to_string(&path) {
@@ -141,6 +162,6 @@ fn write_gitignore(root: PathBuf) -> Result<(), Error> {
     Ok(())
 }
 
-fn trust_file(root: &PathBuf, fingerprint: String) -> PathBuf {
+fn trust_file(root: &Path, fingerprint: String) -> PathBuf {
     root.join(format!(".trust-{}", fingerprint))
 }

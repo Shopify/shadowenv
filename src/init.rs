@@ -4,7 +4,7 @@ use std::path::PathBuf;
 /// hooks.
 pub fn run(shellname: &str) -> i32 {
     let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
-    match shellname.as_ref() {
+    match shellname {
         "bash" => print_script(pb, include_bytes!("../sh/shadowenv.bash.in")),
         "zsh" => print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),
         "fish" => print_script(pb, include_bytes!("../sh/shadowenv.fish.in")),

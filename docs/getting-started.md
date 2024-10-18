@@ -13,7 +13,6 @@ page_nav:
   next:
     content: Shadowlisp API
     url: /shadowlisp
-
 ---
 
 # Installation
@@ -80,11 +79,11 @@ Make sure to restart your shell after adding this.
 
 # A Quick Demo
 
-Shadowenv constantly scans your current directory, and all of its parents, for a directory named
-`.shadowenv.d`. The nearest one wins, just like if you have nested git repositories.
+Shadowenv constantly scans your current directory and all of its parents for directories named
+`.shadowenv.d`. It applies environments from all ancestors of the current directory, in order from highest to lowest in the file system tree (closest environment is applied last).
 
-When a `.shadowenv.d` directory is found, Shadowenv first checks that you've [Trusted]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/trust) it.
-Then, it looks for any files ending with `.lisp` in that directory, and runs them as
+When `.shadowenv.d` directories are found, Shadowenv first checks that you've [Trusted]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/trust) them.
+Then, it looks for any files ending with `.lisp` in those directories, and runs them as
 [Shadowlisp]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/shadowlisp).
 
 Here's an example of what a Shadowlisp file might look like:
@@ -95,20 +94,19 @@ Here's an example of what a Shadowlisp file might look like:
 (env/prepend-to-pathlist "PATH" "./bin")
 ```
 
-If you try creating an empty `.shadowenv.d`, and then adding that content to a `*.lisp` file inside
-it, you'll get an error back about an "untrusted" shadowenv. In order to fix this, run:
+If you try creating `.shadowenv.d` directories, and then adding that content to `*.lisp` files inside
+them, you'll get an error back about "untrusted" shadowenvs. In order to fix this, run:
 
 ```bash
 shadowenv trust
 ```
 
-This will mark the directory as trusted, telling shadowenv that it can safely run any shadowlisp
-programs it finds inside. You should see "shadowenv activated." in your terminal. Then, if you `echo
+This will mark the closest shadowenv directory as trusted, telling shadowenv that it can safely run any shadowlisp
+programs it finds inside. You should see an activation message in your terminal, which now includes information about added and removed directories. Then, if you `echo
 $DEBUG`, you will see "1" printed, because the script set "DEBUG" to "1".
 
-Next, `cd ..` to get out of the directory containing the shadowenv. You will see "deactivated
-shadowenv." printed automatically. If you `echo $DEBUG`, you'll see whatever value you had prior to
-creating the Shadowenv: most likely no value.
+Next, `cd ..` to get out of the directory containing the shadowenv. You will see a deactivation message printed automatically, also showing which directories were removed. If you `echo $DEBUG`, you'll see whatever value you had prior to
+activating the Shadowenv: most likely no value.
 
 Those are the basics! There's a bit [more you can do with Shadowlisp]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/shadowlisp), and we have some
 [suggestions]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/best-practices) for how to actually use Shadowenv in an organization.
@@ -123,10 +121,8 @@ Check out the [Integration]({% if jekyll.environment == 'production' %}{{ site.d
 
 # Usage in Scripts
 
-Sometimes you may want a Shadowenv loaded in a non-interactive script. This is what `shadowenv exec`
-is for. When you run `shadowenv exec`, Shadowenv will load the Shadowlisp from the current directory
-and execute the specified program. For example, imagine a directory with a Shadowenv that puts
-`nginx` on the `PATH`:
+Sometimes you may want Shadowenvs loaded in a non-interactive script. This is what `shadowenv exec`
+is for. When you run `shadowenv exec`, Shadowenv will load the Shadowlisp from the current directory and all its ancestors, and execute the specified program. For example, imagine a directory structure with Shadowenvs that set up the environment for `nginx`:
 
 ```bash
 #!/bin/sh
@@ -136,4 +132,4 @@ shadowenv exec -- nginx -g 'daemon off;'
 ```
 
 In this case, we didn't need to load the Shadowenv shell hook, as `shadowenv exec` loaded the
-environment before executing nginx.
+environments before executing nginx.

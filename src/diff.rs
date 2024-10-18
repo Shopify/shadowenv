@@ -32,8 +32,9 @@ fn run_with_logger(
     color: bool,
     shadowenv_data: String,
 ) -> i32 {
-    let mut parts = shadowenv_data.splitn(2, ':');
+    let mut parts = shadowenv_data.splitn(3, ':');
     let _prev_hash = parts.next();
+    let _prev_dirs = parts.next().unwrap_or("[]");
     let json_data = parts.next().unwrap_or("{}");
     let shadowenv_data = undo::Data::from_str(json_data).unwrap();
     let mut scalars = shadowenv_data
@@ -49,9 +50,9 @@ fn run_with_logger(
 
     for (name, value) in env_vars {
         if let Some(scalar) = scalars.remove(&name) {
-            diff_scalar(logger, &scalar, color)
+            diff_scalar(logger, scalar, color)
         } else if let Some(list) = lists.remove(&name) {
-            diff_list(logger, &list, &value, color)
+            diff_list(logger, list, &value, color)
         } else if verbose {
             print_verbose(logger, &name, &value)
         }
@@ -154,10 +155,10 @@ mod tests {
             ("VAR_C".to_string(), "/added:/existent".to_string()),
         ];
 
-        let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_C","additions":["/added"],"deletions":["/removed"]},{"name":"VAR_B","additions":["/added"],"deletions":[]},{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
+        let data = r#"62b0b9f86cda84d4:[]:{"scalars":[],"lists":[{"name":"VAR_C","additions":["/added"],"deletions":["/removed"]},{"name":"VAR_B","additions":["/added"],"deletions":[]},{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
         let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
 
-        let expected: Vec<_> = vec![
+        let expected: Vec<_> = [
             "- VAR_A=/existent",
             "+ VAR_A=/added:/existent",
             "- VAR_B=",

@@ -6,13 +6,13 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::IsTerminal,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
 
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
-const SHADOWENV: &'static str = concat!(
+const SHADOWENV: &str = concat!(
     "\x1b[38;5;249ms\x1b[38;5;248mh\x1b[38;5;247ma\x1b[38;5;246md\x1b[38;5;245mo",
     "\x1b[38;5;244mw\x1b[38;5;243me\x1b[38;5;242mn\x1b[38;5;241mv\x1b[38;5;240m",
 );
@@ -33,31 +33,75 @@ pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
     };
     let err = backticks_to_bright_green(err);
     eprintln!("{} \x1b[1;31mfailure: {}\x1b[0m", SHADOWENV, err);
-    return 1;
+    1
 }
 
-pub fn print_activation_to_tty(activated: bool, features: HashSet<Feature>) {
+pub fn print_activation_to_tty(
+    current_dirs: HashSet<PathBuf>,
+    prev_dirs: HashSet<PathBuf>,
+    features: HashSet<Feature>,
+) {
     if !should_print_activation() {
         return;
     }
-    if activated {
-        if features.len() == 0 {
-            eprint!("\x1b[1;34mactivated {}", SHADOWENV);
+    let added_dirs: HashSet<PathBuf> = current_dirs.difference(&prev_dirs).cloned().collect();
+    let removed_dirs: HashSet<PathBuf> = prev_dirs.difference(&current_dirs).cloned().collect();
+
+    let in_shadowenv = !current_dirs.is_empty();
+    let previously_in_shadowenv = !prev_dirs.is_empty();
+
+    let status = if in_shadowenv {
+        if previously_in_shadowenv {
+            "modified"
         } else {
-            let feature_list = features
-                .iter()
-                .map(|s| format!("{}", s))
-                .collect::<Vec<String>>()
-                .join(", ");
-            eprint!(
-                "\x1b[1;34mactivated {} \x1b[1;34m({})",
-                SHADOWENV, feature_list
-            );
+            "activated"
         }
+    } else if previously_in_shadowenv {
+        "deactivated"
     } else {
-        eprint!("\x1b[1;34mdeactivated {}\x1b[1;34m", SHADOWENV);
+        return; // No change, nothing to print
+    };
+
+    let feature_list = if !features.is_empty() {
+        format!(
+            " \x1b[1;34m({})",
+            features
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    } else {
+        String::new()
+    };
+
+    eprintln!(
+        "\x1b[1;34m{}{} {}{}\x1b[0m",
+        status,
+        dir_diff(added_dirs, removed_dirs).unwrap_or_default(),
+        SHADOWENV,
+        feature_list
+    );
+}
+
+fn dir_diff(added_dirs: HashSet<PathBuf>, removed_dirs: HashSet<PathBuf>) -> Option<String> {
+    if added_dirs.is_empty() && removed_dirs.is_empty() {
+        return None;
     }
-    eprintln!("\x1b[0m");
+
+    let mut output = String::with_capacity(added_dirs.len() + removed_dirs.len() + 3);
+    output.push_str("\x1b[1;34m[\x1b[0m");
+
+    output.push_str(&"\x1b[1;32m+\x1b[0m".repeat(added_dirs.len()));
+
+    if !added_dirs.is_empty() && !removed_dirs.is_empty() {
+        output.push_str("\x1b[1;34m|\x1b[0m");
+    }
+
+    output.push_str(&"\x1b[1;31m-\x1b[0m".repeat(removed_dirs.len()));
+
+    output.push_str("\x1b[1;34m]\x1b[0m");
+    Some(output)
 }
 
 fn backticks_to_bright_green(err: Error) -> String {
@@ -71,14 +115,18 @@ fn backticks_to_bright_green(err: Error) -> String {
 
 fn check_and_trigger_cooldown(err: &Error, shellpid: u32) -> Result<bool, Error> {
     // if no .shadowenv.d, then Err(_) just means no cooldown: always display error.
-    let root = loader::find_root(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?
-        .ok_or_else(|| anyhow!("no .shadowenv.d"))?;
+    let roots = loader::find_roots(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    if roots.is_empty() {
+        return Err(anyhow!("no .shadowenv.d"));
+    }
 
-    let _ = clean_up_stale_errors(&root, Duration::new(300, 0));
+    let root = roots.first().unwrap();
+
+    let _ = clean_up_stale_errors(root, Duration::new(300, 0));
 
     let errindex = cooldown_index(err).ok_or_else(|| anyhow!("error not subject to cooldown"))?;
 
-    let errfilepath = err_file(&root, errindex, shellpid)?;
+    let errfilepath = err_file(root, errindex, shellpid)?;
 
     match check_cooldown_sentinel(&errfilepath, cooldown()) {
         Ok(true) => Ok(true),
@@ -90,10 +138,7 @@ fn check_and_trigger_cooldown(err: &Error, shellpid: u32) -> Result<bool, Error>
 }
 
 fn cooldown_index(err: &Error) -> Option<u32> {
-    match err.downcast_ref::<trust::NotTrusted>() {
-        Some(_) => Some(0),
-        None => None,
-    }
+    err.downcast_ref::<trust::NotTrusted>().map(|_| 0)
 }
 
 fn clean_up_stale_errors(root: &PathBuf, timeout: Duration) -> Result<(), Error> {
@@ -116,12 +161,12 @@ fn clean_up_stale_errors(root: &PathBuf, timeout: Duration) -> Result<(), Error>
     Ok(())
 }
 
-fn err_file(root: &PathBuf, errindex: u32, shellpid: u32) -> Result<PathBuf, Error> {
+fn err_file(root: &Path, errindex: u32, shellpid: u32) -> Result<PathBuf, Error> {
     Ok(root.join(format!(".error-{}-{}", errindex, shellpid)))
 }
 
 // return value of Ok(true) indicates it's on cooldown and should be suppressed.
-fn check_cooldown_sentinel(path: &PathBuf, timeout: Duration) -> Result<bool, Error> {
+fn check_cooldown_sentinel(path: &Path, timeout: Duration) -> Result<bool, Error> {
     let metadata = path.metadata()?;
     let mtime = metadata.modified()?;
 
@@ -150,5 +195,5 @@ fn should_print_activation() -> bool {
         Err(_) => configured_to_print = true,
     };
 
-    return std::io::stderr().is_terminal() && configured_to_print;
+    std::io::stderr().is_terminal() && configured_to_print
 }

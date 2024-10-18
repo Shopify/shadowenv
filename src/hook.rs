@@ -1,15 +1,15 @@
 use crate::{
-    hash::{Hash, Source},
-    lang, loader, output,
+    hash::{Hash, SourceList},
+    lang::{self, ShadowLang},
+    loader, output,
     shadowenv::Shadowenv,
-    trust, undo,
+    trust::ensure_dir_tree_trusted,
+    undo,
 };
 use anyhow::Error;
 use serde_derive::Serialize;
-use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
-
-use crate::lang::ShadowLang;
 use shell_escape as shell;
+use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
 
 pub enum VariableOutputMode {
     FishMode,
@@ -28,11 +28,11 @@ struct Modifications {
 
 impl Modifications {
     fn new(exports: HashMap<String, Option<String>>) -> Modifications {
-        return Modifications {
+        Modifications {
             schema: "v2".to_string(),
             exported: exports,
             unexported: HashMap::new(),
-        };
+        }
     }
 }
 
@@ -43,8 +43,8 @@ pub fn run(
     force: bool,
 ) -> Result<(), Error> {
     match load_env(pathbuf, shadowenv_data, force)? {
-        Some((shadowenv, activation)) => {
-            apply_env(&shadowenv, mode, activation)?;
+        Some(shadowenv) => {
+            apply_env(&shadowenv, mode)?;
             Ok(())
         }
         None => Ok(()),
@@ -55,7 +55,7 @@ pub fn load_env(
     pathbuf: PathBuf,
     shadowenv_data: String,
     force: bool,
-) -> Result<Option<(Shadowenv, bool)>, Error> {
+) -> Result<Option<Shadowenv>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -67,51 +67,77 @@ pub fn load_env(
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    let target: Option<Source> = load_trusted_source(pathbuf)?;
+    // "targets" are sources of shadowenv lisp files
+    let targets = load_trusted_sources(pathbuf, false)?;
 
-    match (&active, &target) {
+    let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
+
+    // before we had multiple targets, this ensured we only act if we needed to
+    match (&active, &targets) {
+        // if there is no active shadowenv and we've got no targets, then we have nothing to compute
         (None, None) => {
             return Ok(None);
         }
-        (Some(a), Some(t)) if a.hash == t.hash()? && !force => {
+        // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
+        // unless the force flag was specified
+        // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
+        (Some(a), Some(_)) if a.hash == targets_hash.unwrap() && !force => {
             return Ok(None);
         }
         (_, _) => (),
     }
 
-    let target_hash = match &target {
-        Some(t) => t.hash().unwrap_or(0),
-        None => 0,
-    };
-
+    // "data" is used to undo changes made when activating a shadowenv
+    // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(env::vars().collect(), data, target_hash);
+    let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
 
-    match target {
-        Some(target) => {
-            match ShadowLang::run_program(shadowenv, target) {
+    match targets {
+        Some(targets) => {
+            // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
+            match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
                 Err(_) => Err(lang::ShadowlispError {}.into()),
-                Ok(shadowenv) => Ok(Some((shadowenv, true))),
+                // note the "true" since we ran code to activate/modify the shadowenv
+                Ok(shadowenv) => Ok(Some(shadowenv)),
             }
         }
-        None => Ok(Some((shadowenv, false))),
+        // note the "false" since we didn't have anything to run
+        None => Ok(Some(shadowenv)),
     }
 }
 
-/// Load a Source from the current dir, ensuring that it is trusted.
-fn load_trusted_source(pathbuf: PathBuf) -> Result<Option<Source>, Error> {
-    if let Some(root) = loader::find_root(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)? {
-        if !trust::is_dir_trusted(&root)? {
-            return Err(trust::NotTrusted {
-                not_trusted_dir_path: pathbuf.to_string_lossy().to_string(),
-            }
-            .into());
-        }
-        return Ok(loader::load(root)?);
+/// Load all Sources from the current dir, ensuring that they are all trusted.
+fn load_trusted_sources(
+    pathbuf: PathBuf,
+    skip_trust_check: bool,
+) -> Result<Option<SourceList>, Error> {
+    #[cfg(not(test))]
+    assert!(!skip_trust_check);
+
+    let roots = loader::find_roots(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    if roots.is_empty() {
+        return Ok(None);
     }
-    Ok(None)
+
+    if !skip_trust_check {
+        ensure_dir_tree_trusted(&roots)?;
+    }
+
+    let mut source_list = SourceList::new();
+    for root in roots {
+        let source = loader::load(root)?;
+        if let Some(source) = source {
+            source_list.prepend_source(source);
+        }
+    }
+
+    if source_list.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(source_list))
 }
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
@@ -125,11 +151,7 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn apply_env(
-    shadowenv: &Shadowenv,
-    mode: VariableOutputMode,
-    activation: bool,
-) -> Result<(), Error> {
+pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
     match mode {
         VariableOutputMode::PosixMode => {
             for (k, v) in shadowenv.exports()? {
@@ -138,7 +160,11 @@ pub fn apply_env(
                     None => println!("unset {}", k),
                 }
             }
-            output::print_activation_to_tty(activation, shadowenv.features());
+            output::print_activation_to_tty(
+                shadowenv.current_dirs(),
+                shadowenv.prev_dirs(),
+                shadowenv.features(),
+            );
         }
         VariableOutputMode::FishMode => {
             for (k, v) in shadowenv.exports()? {
@@ -156,7 +182,11 @@ pub fn apply_env(
                     }
                 }
             }
-            output::print_activation_to_tty(activation, shadowenv.features());
+            output::print_activation_to_tty(
+                shadowenv.current_dirs(),
+                shadowenv.prev_dirs(),
+                shadowenv.features(),
+            );
         }
         VariableOutputMode::PorcelainMode => {
             // three fields: <operation> : <name> : <value>
@@ -195,11 +225,44 @@ mod tests {
     use tempfile::tempdir;
     #[test]
     fn load_trusted_source_returns_an_error_for_untrusted_folders() {
-        let temp_dir = tempdir().unwrap().into_path();
-        let path = temp_dir.to_string_lossy().to_string();
-        fs::create_dir(temp_dir.join(".shadowenv.d")).unwrap();
-        let result = load_trusted_source(temp_dir);
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join(".shadowenv.d");
+        fs::create_dir(&path).unwrap();
+        let result = load_trusted_sources(path.clone(), false);
         assert!(result.is_err());
-        assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path), result.err().unwrap().to_string())
+        assert_eq!(format!("directory: '{}' contains untrusted shadowenv program: `shadowenv help trust` to learn more.", path.canonicalize().unwrap().to_string_lossy()), result.err().unwrap().to_string())
+    }
+
+    #[test]
+    fn load_trusted_sources_returns_nearest_sources_last() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path();
+
+        // Create test directories and files
+        fs::create_dir_all(base_path.join("dir1/.shadowenv.d")).unwrap();
+        fs::create_dir_all(base_path.join("dir1/dir2/.shadowenv.d")).unwrap();
+        fs::write(
+            base_path.join("dir1/.shadowenv.d/test.lisp"),
+            "(env/set \"ORDER\" \"1\")",
+        )
+        .unwrap();
+        fs::write(
+            base_path.join("dir1/dir2/.shadowenv.d/test.lisp"),
+            "(env/set \"ORDER\" \"2\")",
+        )
+        .unwrap();
+
+        let result = load_trusted_sources(base_path.join("dir1/dir2"), true)
+            .unwrap()
+            .unwrap();
+
+        let sources = result.consume();
+        assert_eq!(sources.len(), 2);
+
+        // Assert that sources are returned in the correct order
+        // The order they are returned is the order they are executed in.
+        // So the outermost env must come first, with the innermost dir coming last.
+        assert!(sources[0].dir.ends_with("dir1"));
+        assert!(sources[1].dir.ends_with("dir1/dir2"));
     }
 }
