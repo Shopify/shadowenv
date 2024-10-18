@@ -164,12 +164,11 @@ impl SourceList {
         let dirs: Vec<PathBuf> = self
             .sources
             .iter()
-            .map(|source| source.dir.clone())
-            .map(|dir| dir.parse().expect("dir not a valid path"))
+            .map(|source| source.dir.parse().expect("dir not a valid path"))
             .collect();
 
         if dirs.is_empty() {
-            return Vec::new();
+            return dirs;
         }
 
         let highest_dir = dirs.first().unwrap();

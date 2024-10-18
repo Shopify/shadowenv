@@ -87,12 +87,6 @@ pub fn load_env(
         (_, _) => (),
     }
 
-    // should probably be a hash of all the target's hashes (?, see above comment)
-    // let target_hash = match &targets {
-    //     Some(t) => t.hash().unwrap_or(0),
-    //     None => 0,
-    // };
-
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
@@ -135,7 +129,6 @@ fn load_trusted_sources(
     for root in roots {
         let source = loader::load(root)?;
         if let Some(source) = source {
-            // stack would be more efficient
             source_list.prepend_source(source);
         }
     }
