@@ -241,6 +241,14 @@ mod tests {
         // Create test directories and files
         fs::create_dir_all(base_path.join("dir1/.shadowenv.d")).unwrap();
         fs::create_dir_all(base_path.join("dir1/dir2/.shadowenv.d")).unwrap();
+
+        // Link the two shadowenvs.
+        std::os::unix::fs::symlink(
+            base_path.join("dir1/.shadowenv.d"),
+            base_path.join("dir1/dir2/.shadowenv.d/parent"),
+        )
+        .unwrap();
+
         fs::write(
             base_path.join("dir1/.shadowenv.d/test.lisp"),
             "(env/set \"ORDER\" \"1\")",
