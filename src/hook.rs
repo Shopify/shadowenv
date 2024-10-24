@@ -116,7 +116,7 @@ fn load_trusted_sources(
     #[cfg(not(test))]
     assert!(!skip_trust_check);
 
-    let roots = loader::find_roots(&pathbuf, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    let roots = loader::find_shadowenv_paths(&pathbuf)?;
     if roots.is_empty() {
         return Ok(None);
     }

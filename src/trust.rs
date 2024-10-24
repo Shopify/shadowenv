@@ -112,7 +112,7 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 pub fn run(dir: PathBuf) -> Result<(), Error> {
     let signer = load_or_generate_signer().unwrap();
 
-    let roots = loader::find_roots(&dir, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    let roots = loader::find_shadowenv_paths(&dir)?;
     if roots.is_empty() {
         return Err(NoShadowenv {}.into());
     }

@@ -115,7 +115,7 @@ fn backticks_to_bright_green(err: Error) -> String {
 
 fn check_and_trigger_cooldown(err: &Error, shellpid: u32) -> Result<bool, Error> {
     // if no .shadowenv.d, then Err(_) just means no cooldown: always display error.
-    let roots = loader::find_roots(&env::current_dir()?, loader::DEFAULT_RELATIVE_COMPONENT)?;
+    let roots = loader::find_shadowenv_paths(&env::current_dir()?)?;
     if roots.is_empty() {
         return Err(anyhow!("no .shadowenv.d"));
     }

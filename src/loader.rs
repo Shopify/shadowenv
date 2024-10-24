@@ -6,15 +6,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const DEFAULT_RELATIVE_COMPONENT: &str = ".shadowenv.d";
+pub const SHADOWENV_DIR: &str = ".shadowenv.d";
 
-/// Search upwards the filesystem branch starting with `at` and then its ancestors looking
-/// for a file or directory named `relative_component`.
-pub fn find_roots(at: &Path, relative_component: &str) -> Result<Vec<PathBuf>, Error> {
+/// Search upwards the filesystem starting at `at` to find the closest shadowenv,
+/// then traverse any parent symlinks if they exist (.shadowenv.d/parent).
+///
+/// This call validates that all parents found satisfy the following:
+/// - Each parent must be an ancestor of the previous parent. Parent links can't
+///   therefore point to adjacent or sub folders.
+/// - Each parent must point to a `.shadowenv.d` basename folder.
+///
+/// This call does _not_ verify that any of the found shadowenvs is trusted.
+/// See [crate::trust::ensure_dir_tree_trusted] for checking trust.
+pub fn find_shadowenv_paths(at: &Path) -> Result<Vec<PathBuf>, Error> {
     let mut roots = Vec::new();
 
     for curr in at.ancestors() {
-        let dirpath = curr.join(relative_component);
+        let dirpath = curr.join(SHADOWENV_DIR);
 
         match fs::read_dir(&dirpath) {
             Ok(_) => roots.push(fs::canonicalize(dirpath)?),
