@@ -84,6 +84,7 @@ pub fn app() -> App<'static, 'static> {
                         .short("n")
                         .help("Do not use color to highlight the diff"),
                 )
+                        .arg(Arg::with_name("json").long("json").help("Return in JSON format"))
                 .arg(
                     // Legacy: This is exported now, and in fact this setting is ignored
                     // completely if $__shadowenv_data is present in the environment.
