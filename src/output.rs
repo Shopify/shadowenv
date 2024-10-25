@@ -59,7 +59,7 @@ pub fn print_activation_to_tty(
     } else if previously_in_shadowenv {
         "deactivated"
     } else {
-        return; // No change, nothing to print
+        return;
     };
 
     let feature_list = if !features.is_empty() {

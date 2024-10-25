@@ -67,43 +67,28 @@ pub fn load_env(
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    // "targets" are sources of shadowenv lisp files
     let targets = load_trusted_sources(pathbuf, false)?;
 
     let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
 
-    // before we had multiple targets, this ensured we only act if we needed to
     match (&active, &targets) {
-        // if there is no active shadowenv and we've got no targets, then we have nothing to compute
         (None, None) => {
             return Ok(None);
         }
-        // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
-        // unless the force flag was specified
-        // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
         (Some(a), Some(_)) if a.hash == targets_hash.unwrap() && !force => {
             return Ok(None);
         }
         (_, _) => (),
     }
 
-    // "data" is used to undo changes made when activating a shadowenv
-    // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
     let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
 
     match targets {
-        Some(targets) => {
-            // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
-            match ShadowLang::run_programs(shadowenv, targets) {
-                // no need to return anything descriptive here since we already
-                // had ketos print it to stderr.
-                Err(_) => Err(lang::ShadowlispError {}.into()),
-                // note the "true" since we ran code to activate/modify the shadowenv
-                Ok(shadowenv) => Ok(Some(shadowenv)),
-            }
-        }
-        // note the "false" since we didn't have anything to run
+        Some(targets) => match ShadowLang::run_programs(shadowenv, targets) {
+            Err(_) => Err(lang::ShadowlispError {}.into()),
+            Ok(shadowenv) => Ok(Some(shadowenv)),
+        },
         None => Ok(Some(shadowenv)),
     }
 }
