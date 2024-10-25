@@ -2,7 +2,7 @@ use crate::hash::Source;
 use anyhow::Error;
 use std::{
     borrow::Cow,
-    fs, iter,
+    fs, io, iter,
     path::{Path, PathBuf},
 };
 
@@ -10,7 +10,7 @@ pub const SHADOWENV_DIR_NAME: &str = ".shadowenv.d";
 pub const SHADOWENV_PARENT_LINK_NAME: &str = "parent";
 
 #[derive(thiserror::Error, Debug)]
-enum TraversalError {
+pub enum TraversalError {
     #[error("Error for parent file at {}: {}", parent_link_path, error)]
     ResolveError {
         parent_link_path: String,
@@ -37,6 +37,9 @@ enum TraversalError {
         parent_link_target: String,
         shadowenv_path: String,
     },
+
+    #[error(transparent)]
+    IoError(#[from] io::Error),
 }
 
 /// Search upwards the filesystem starting at `at` to find the closest shadowenv,
@@ -49,7 +52,7 @@ enum TraversalError {
 ///
 /// This call does _not_ verify that any of the found shadowenvs is trusted.
 /// See [crate::trust::ensure_dir_tree_trusted] for checking trust.
-pub fn find_shadowenv_paths(at: &Path) -> Result<Vec<PathBuf>, Error> {
+pub fn find_shadowenv_paths(at: &Path) -> Result<Vec<PathBuf>, TraversalError> {
     // First find the closest shadowenv.
     let closest = match closest_shadowenv(at)? {
         Some(closest) => closest,
@@ -62,7 +65,9 @@ pub fn find_shadowenv_paths(at: &Path) -> Result<Vec<PathBuf>, Error> {
     Ok(iter::once(closest).chain(parents).collect())
 }
 
-fn closest_shadowenv(at: &Path) -> Result<Option<PathBuf>, Error> {
+/// Attempts to find the closest shadowenv folder to `at`.
+/// Returns a canonicalized path to the found shadowenv folder.
+fn closest_shadowenv(at: &Path) -> Result<Option<PathBuf>, TraversalError> {
     for ancestor in at.ancestors() {
         let dirpath = ancestor.join(SHADOWENV_DIR_NAME);
         let metadata = match fs::metadata(&dirpath) {
@@ -82,23 +87,25 @@ fn closest_shadowenv(at: &Path) -> Result<Option<PathBuf>, Error> {
 /// Expects `from_shadowenv` to be canonicalized.
 fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, TraversalError> {
     let parent_link = from_shadowenv.join(SHADOWENV_PARENT_LINK_NAME);
-    if let Err(_) = fs::metadata(&parent_link) {
-        // Symlink doesn't exist or process is lacking permissions.
-        return Ok(vec![]);
-    };
 
-    // if !metadata.is_symlink() {
-    //     return Err(TraversalError::NotASymlink(
-    //         parent_pointer.to_string_lossy().to_string(),
-    //     ));
-    // }
+    // `symlink_metadata`, opposed to `metadata`, doesn't resolve symlinks, which means that we can catch
+    // the case where symlink points to an non-existant file later on for a more precise error.
+    let metadata = match fs::symlink_metadata(&parent_link) {
+        Ok(metadata) => metadata,
+        // Symlink file itself doesn't exist or process is lacking access permissions.
+        Err(_) => return Ok(vec![]),
+    };
 
     // Must be a valid symlink.
     let resolved_parent = fs::read_link(&parent_link)
         .and_then(|resolved| resolved.canonicalize())
         .map_err(|err| TraversalError::ResolveError {
             parent_link_path: parent_link.to_string_lossy().to_string(),
-            error: err.to_string(),
+            error: if metadata.is_symlink() {
+                err.to_string()
+            } else {
+                "Not a symlink".to_owned()
+            },
         })?;
 
     // TODO: Refactor into better structure with the options.
@@ -158,6 +165,8 @@ pub fn load(dirpath: PathBuf) -> Result<Option<Source>, Error> {
 mod tests {
     use super::*;
     use crate::hash::SourceFile;
+    use std::os::unix::fs::symlink;
+    use tempfile::tempdir;
 
     #[test]
     fn test_load() {
@@ -186,5 +195,206 @@ mod tests {
         ];
 
         assert_eq!(files, expected)
+    }
+
+    #[test]
+    fn closest_shadowenv_from_subfolder() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let dir_one = base_path.join("dir1/.shadowenv.d");
+        let dir_two = base_path.join("dir1/dir2/dir3");
+
+        create_all(&[&dir_one, &dir_two]);
+
+        let closest = closest_shadowenv(&dir_two).unwrap().unwrap();
+        assert_eq!(closest, dir_one);
+    }
+
+    #[test]
+    fn closest_shadowenv_from_inside_shadowenv() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv_path = base_path.join("dir1/.shadowenv.d");
+
+        fs::create_dir_all(&shadowenv_path).unwrap();
+
+        let closest = closest_shadowenv(&shadowenv_path).unwrap().unwrap();
+        assert_eq!(closest, shadowenv_path);
+    }
+
+    #[test]
+    fn find_shadowenv_paths_success() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+
+        let shadowenv_one_path = base_path.join("dir1/.shadowenv.d");
+        let shadowenv_two_path = base_path.join("dir1/dir2/dir3/.shadowenv.d");
+        let shadowenv_three_path = base_path.join("dir1/dir2/dir3/dir4/.shadowenv.d");
+
+        create_all(&[
+            &shadowenv_one_path,
+            &shadowenv_two_path,
+            &shadowenv_three_path,
+        ]);
+
+        // Three -> two
+        symlink(
+            &shadowenv_two_path,
+            &shadowenv_three_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        // Two -> one
+        symlink(
+            &shadowenv_one_path,
+            &shadowenv_two_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        assert_eq!(
+            find_shadowenv_paths(shadowenv_three_path.parent().unwrap()).unwrap(),
+            [shadowenv_three_path, shadowenv_two_path, shadowenv_one_path]
+        );
+    }
+
+    #[test]
+    fn find_shadowenv_paths_ancestors_only() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+
+        let shadowenv_one_path = base_path.join("dir1");
+        let shadowenv_one_sibling_path = base_path.join("dir1_sibling/.shadowenv.d");
+        let shadowenv_two_path = base_path.join("dir1/dir2/.shadowenv.d");
+
+        create_all(&[
+            &shadowenv_one_path,
+            &shadowenv_one_sibling_path,
+            &shadowenv_two_path,
+        ]);
+
+        // Two -> one sibling
+        symlink(
+            &shadowenv_one_sibling_path,
+            &shadowenv_two_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            find_shadowenv_paths(shadowenv_two_path.parent().unwrap()).unwrap_err(),
+            TraversalError::NotAnAncestor { .. }
+        ));
+    }
+
+    #[test]
+    fn find_shadowenv_paths_no_descending_links() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+
+        let shadowenv_one_path = base_path.join("dir1/.shadowenv.d");
+        let shadowenv_two_path = base_path.join("dir1/dir2/.shadowenv.d");
+
+        create_all(&[&shadowenv_one_path, &shadowenv_two_path]);
+
+        // Two -> one
+        symlink(
+            &shadowenv_one_path,
+            &shadowenv_two_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        // One -> two
+        symlink(
+            &shadowenv_two_path,
+            &shadowenv_one_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            find_shadowenv_paths(shadowenv_two_path.parent().unwrap()).unwrap_err(),
+            TraversalError::NotAnAncestor { .. }
+        ));
+    }
+
+    #[test]
+    fn find_shadowenv_paths_invalid_parent() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv = base_path.join("top/sub/.shadowenv.d");
+
+        create_all(&[&shadowenv]);
+
+        // Two -> not a shadowenv
+        symlink(
+            &base_path.join("top"),
+            &shadowenv.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            find_shadowenv_paths(shadowenv.parent().unwrap()).unwrap_err(),
+            TraversalError::InvalidLinkTarget { .. }
+        ));
+    }
+
+    #[test]
+    fn find_shadowenv_paths_not_a_symlink() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv = base_path.join("dir/.shadowenv.d");
+        let shadowenv_invalid_parent_file = base_path
+            .join("dir/.shadowenv.d")
+            .join(SHADOWENV_PARENT_LINK_NAME);
+
+        create_all(&[&shadowenv, &shadowenv_invalid_parent_file]);
+        assert!(
+            match find_shadowenv_paths(shadowenv.parent().unwrap()).unwrap_err() {
+                TraversalError::ResolveError {
+                    parent_link_path,
+                    error,
+                } =>
+                    parent_link_path == shadowenv_invalid_parent_file.to_string_lossy().to_string()
+                        && error == "Not a symlink".to_owned(),
+                _ => false,
+            }
+        );
+    }
+
+    #[test]
+    fn find_shadowenv_paths_nonexistant_link_target() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv = base_path.join("dir/.shadowenv.d");
+        let link_path = shadowenv.join(SHADOWENV_PARENT_LINK_NAME);
+
+        create_all(&[&shadowenv]);
+
+        // Shadowenv -> doesn't exist
+        // Note: Rust doesn't allow creating links to nonexistant files, so we're doing a `Command`.
+        let _ = std::process::Command::new("ln")
+            .args([
+                "-s",
+                base_path.join("nonexistant").to_str().unwrap(),
+                link_path.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+
+        assert!(
+            match find_shadowenv_paths(shadowenv.parent().unwrap()).unwrap_err() {
+                TraversalError::ResolveError {
+                    parent_link_path,
+                    error,
+                } =>
+                    parent_link_path == link_path.to_string_lossy().to_string()
+                        && error.contains("No such file or directory"),
+                _ => false,
+            }
+        );
+    }
+
+    fn create_all(dirs: &[&PathBuf]) {
+        for dir in dirs {
+            fs::create_dir_all(dir).unwrap();
+        }
     }
 }
