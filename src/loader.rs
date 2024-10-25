@@ -53,6 +53,8 @@ pub enum TraversalError {
 /// - Each parent must be an ancestor of the previous parent. Parent links can't
 ///   therefore point to adjacent or sub folders.
 /// - Each parent must point to a `.shadowenv.d` basename folder.
+/// - A shadowenv must not reference itself.
+/// - A shadowenv parent link must be a symlink link pointing to a `.shadowenv.d`.
 ///
 /// This call does _not_ verify that any of the found shadowenvs is trusted.
 /// See [crate::trust::ensure_dir_tree_trusted] for checking trust.

@@ -79,8 +79,8 @@ Make sure to restart your shell after adding this.
 
 # A Quick Demo
 
-Shadowenv constantly scans your current directory and all of its parents for directories named
-`.shadowenv.d`. It applies environments from all ancestors of the current directory, in order from highest to lowest in the file system tree (closest environment is applied last).
+Shadowenv constantly scans your current directory and all of its parents for a directory named
+`.shadowenv.d`, which is called your closest shadowenv. Shadowenv environments can stack by linking to each other using a `parent` symlink (`.shadowenv.d/parent`). Shadowenv will collect and apply all linked environments from the closest shadowenv in order from highest to lowest in the file system tree (closest environment is applied last).
 
 When `.shadowenv.d` directories are found, Shadowenv first checks that you've [Trusted]({% if jekyll.environment == 'production' %}{{ site.doks.baseurl }}{% endif %}/trust) them.
 Then, it looks for any files ending with `.lisp` in those directories, and runs them as
@@ -102,8 +102,7 @@ shadowenv trust
 ```
 
 This will mark the closest shadowenv directory as trusted, telling shadowenv that it can safely run any shadowlisp
-programs it finds inside. You should see an activation message in your terminal, which now includes information about added and removed directories. Then, if you `echo
-$DEBUG`, you will see "1" printed, because the script set "DEBUG" to "1".
+programs it finds inside. Note: To trust other shadowenvs further up, you'll need to `cd` up the tree and run `shadowenv trust` there. You should see an activation message in your terminal, which now includes information about added and removed directories. Then, if you `echo $DEBUG`, you will see "1" printed, because the script set "DEBUG" to "1".
 
 Next, `cd ..` to get out of the directory containing the shadowenv. You will see a deactivation message printed automatically, also showing which directories were removed. If you `echo $DEBUG`, you'll see whatever value you had prior to
 activating the Shadowenv: most likely no value.
