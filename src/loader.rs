@@ -2,7 +2,7 @@ use crate::hash::Source;
 use anyhow::Error;
 use std::{
     borrow::Cow,
-    fs, io, iter,
+    env, fs, io, iter,
     path::{Path, PathBuf},
 };
 
@@ -11,6 +11,7 @@ pub const SHADOWENV_PARENT_LINK_NAME: &str = "parent";
 
 #[derive(thiserror::Error, Debug)]
 pub enum TraversalError {
+    /// General resolver error.
     #[error("Error for parent file at {}: {}", parent_link_path, error)]
     ResolveError {
         parent_link_path: String,
@@ -37,6 +38,9 @@ pub enum TraversalError {
         parent_link_target: String,
         shadowenv_path: String,
     },
+
+    #[error("Shadow env at {} references itself", shadowenv_path)]
+    SelfReferential { shadowenv_path: String },
 
     #[error(transparent)]
     IoError(#[from] io::Error),
@@ -96,17 +100,28 @@ fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, T
         Err(_) => return Ok(vec![]),
     };
 
+    let previous_working_dir = env::current_dir().unwrap();
+    env::set_current_dir(from_shadowenv).unwrap();
+
     // Must be a valid symlink.
+    // We need to resolve the symlink in context of the .shadowenv.d folder it is in.
     let resolved_parent = fs::read_link(&parent_link)
         .and_then(|resolved| resolved.canonicalize())
-        .map_err(|err| TraversalError::ResolveError {
-            parent_link_path: parent_link.to_string_lossy().to_string(),
-            error: if metadata.is_symlink() {
-                err.to_string()
-            } else {
-                "Not a symlink".to_owned()
-            },
+        .map_err(|err| {
+            env::set_current_dir(&previous_working_dir).unwrap();
+
+            TraversalError::ResolveError {
+                parent_link_path: parent_link.to_string_lossy().to_string(),
+                error: if metadata.is_symlink() {
+                    err.to_string()
+                } else {
+                    "Not a symlink".to_owned()
+                },
+            }
         })?;
+
+    // Restore working directory.
+    env::set_current_dir(previous_working_dir).unwrap();
 
     // TODO: Refactor into better structure with the options.
     let base_name = resolved_parent.file_name();
@@ -117,6 +132,13 @@ fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, T
         return Err(TraversalError::InvalidLinkTarget {
             path_to_parent_link: parent_link.to_string_lossy().to_string(),
             parent_link_target: base_name_stringified.unwrap().to_string(),
+        });
+    }
+
+    // Must not be self-referential.
+    if from_shadowenv == &resolved_parent {
+        return Err(TraversalError::SelfReferential {
+            shadowenv_path: from_shadowenv.to_string_lossy().to_string(),
         });
     }
 
@@ -323,7 +345,7 @@ mod tests {
 
         create_all(&[&shadowenv]);
 
-        // Two -> not a shadowenv
+        // Shadowenv -> not a shadowenv
         symlink(
             &base_path.join("top"),
             &shadowenv.join(SHADOWENV_PARENT_LINK_NAME),
@@ -369,7 +391,7 @@ mod tests {
         create_all(&[&shadowenv]);
 
         // Shadowenv -> doesn't exist
-        // Note: Rust doesn't allow creating links to nonexistant files, so we're doing a `Command`.
+        // Note: Rust doesn't allow creating links to nonexistant files, so we're using `Command`.
         let _ = std::process::Command::new("ln")
             .args([
                 "-s",
@@ -389,6 +411,63 @@ mod tests {
                         && error.contains("No such file or directory"),
                 _ => false,
             }
+        );
+    }
+
+    #[test]
+    fn find_shadowenv_paths_disallow_self_reference() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv = base_path.join("dir/.shadowenv.d");
+        let link_path = shadowenv.join(SHADOWENV_PARENT_LINK_NAME);
+
+        create_all(&[&shadowenv]);
+
+        // Shadowenv -> same shadowenv
+        symlink(&shadowenv, &link_path).unwrap();
+
+        assert!(matches!(
+            find_shadowenv_paths(shadowenv.parent().unwrap()).unwrap_err(),
+            TraversalError::SelfReferential { .. }
+        ));
+    }
+
+    #[test]
+    fn find_shadowenv_paths_using_relative_paths() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv_one_path = base_path.join("dir1/.shadowenv.d");
+        let shadowenv_two_path = base_path.join("dir1/dir2/.shadowenv.d");
+        let shadowenv_three_path = base_path.join("dir1/dir2/dir3/.shadowenv.d");
+
+        create_all(&[
+            &shadowenv_one_path,
+            &shadowenv_two_path,
+            &shadowenv_three_path,
+        ]);
+
+        // Three -> one
+        symlink(
+            PathBuf::from("../../../.shadowenv.d"),
+            shadowenv_three_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        // Two -> one
+        symlink(
+            PathBuf::from("../../.shadowenv.d"),
+            shadowenv_two_path.join(SHADOWENV_PARENT_LINK_NAME),
+        )
+        .unwrap();
+
+        assert_eq!(
+            find_shadowenv_paths(shadowenv_three_path.parent().unwrap()).unwrap(),
+            [shadowenv_three_path, shadowenv_one_path.clone()]
+        );
+
+        assert_eq!(
+            find_shadowenv_paths(shadowenv_two_path.parent().unwrap()).unwrap(),
+            [shadowenv_two_path, shadowenv_one_path]
         );
     }
 
