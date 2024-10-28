@@ -13,6 +13,7 @@ use std::{
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
 const SHADOWENV: &str = concat!(
+    "\x1b[38;5;249m░",
     "\x1b[38;5;249ms\x1b[38;5;248mh\x1b[38;5;247ma\x1b[38;5;246md\x1b[38;5;245mo",
     "\x1b[38;5;244mw\x1b[38;5;243me\x1b[38;5;242mn\x1b[38;5;241mv\x1b[38;5;240m",
 );
@@ -49,12 +50,12 @@ pub fn print_activation_to_tty(
 
     let feature_list = if !features.is_empty() {
         format!(
-            " \x1b[1;34m{}",
+            " \x1b[1;38;5;245m{}",
             features
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()
-                .join("\x1b[38;5;240m,\x1b[1;34m")
+                .join("\x1b[38;5;240m,\x1b[1;38;5;245m")
         )
     } else {
         String::new()
