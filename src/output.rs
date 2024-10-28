@@ -64,22 +64,21 @@ pub fn print_activation_to_tty(
 
     let feature_list = if !features.is_empty() {
         format!(
-            " \x1b[1;34m({})",
+            " \x1b[1;34m{}",
             features
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join("\x1b[38;5;240m,\x1b[1;34m")
         )
     } else {
         String::new()
     };
 
     eprintln!(
-        "\x1b[1;34m{}{} {}{}\x1b[0m",
-        status,
-        dir_diff(added_dirs, removed_dirs).unwrap_or_default(),
+        "\x1b[1;34m{}{}{}\x1b[0m",
         SHADOWENV,
+        dir_diff(added_dirs, removed_dirs).unwrap_or_default(),
         feature_list
     );
 }
@@ -89,18 +88,24 @@ fn dir_diff(added_dirs: HashSet<PathBuf>, removed_dirs: HashSet<PathBuf>) -> Opt
         return None;
     }
 
-    let mut output = String::with_capacity(added_dirs.len() + removed_dirs.len() + 3);
-    output.push_str("\x1b[1;34m[\x1b[0m");
+    let mut output = String::with_capacity(64);
+    output.push_str("\x1b[38;5;240m[");
 
-    output.push_str(&"\x1b[1;32m+\x1b[0m".repeat(added_dirs.len()));
-
-    if !added_dirs.is_empty() && !removed_dirs.is_empty() {
-        output.push_str("\x1b[1;34m|\x1b[0m");
+    if !added_dirs.is_empty() {
+        output.push_str(&"\x1b[0;32m");
+        output.push_str(&"+".repeat(added_dirs.len()));
     }
 
-    output.push_str(&"\x1b[1;31m-\x1b[0m".repeat(removed_dirs.len()));
+    if !added_dirs.is_empty() && !removed_dirs.is_empty() {
+        output.push_str("\x1b[38;5;240m|");
+    }
 
-    output.push_str("\x1b[1;34m]\x1b[0m");
+    if !removed_dirs.is_empty() {
+        output.push_str(&"\x1b[0;31m");
+        output.push_str(&"-".repeat(removed_dirs.len()));
+    }
+
+    output.push_str("\x1b[38;5;240m]\x1b[0m");
     Some(output)
 }
 
