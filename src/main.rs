@@ -13,10 +13,10 @@ mod shadowenv;
 mod trust;
 mod undo;
 
-use crate::{hook::VariableOutputMode, shadowenv::Shadowenv};
+use crate::shadowenv::Shadowenv;
 use anyhow::{anyhow, Error};
 use clap::Parser;
-use cli::{ExecCmd, HookCmd};
+use cli::ExecCmd;
 use std::{env, iter, path::PathBuf, process};
 
 fn main() {
@@ -25,7 +25,7 @@ fn main() {
     let result = match cli::ShadowenvApp::parse() {
         Diff(cmd) => Ok(diff::run(cmd)),
         Exec(cmd) => run_exec(cmd),
-        Hook(cmd) => run_hook(cmd),
+        Hook(cmd) => hook::run(cmd),
         Init(cmd) => Ok(init::run(cmd)),
         Trust(_) => trust::run(),
         PromptWidget(_) => Ok(prompt_widget::run()),
@@ -37,34 +37,6 @@ fn main() {
         }
 
         process::exit(1);
-    }
-}
-
-fn run_hook(cmd: HookCmd) -> Result<(), Error> {
-    let mode = if cmd.format.porcelain {
-        VariableOutputMode::Porcelain
-    } else if cmd.format.fish {
-        VariableOutputMode::Fish
-    } else if cmd.format.json {
-        VariableOutputMode::Json
-    } else if cmd.format.pretty_json {
-        VariableOutputMode::PrettyJson
-    } else {
-        VariableOutputMode::Posix
-    };
-
-    let data = Shadowenv::from_env();
-    if let Err(err) = hook::run(get_current_dir_or_exit(), data, mode, cmd.force) {
-        let pid = cmd
-            .shellpid
-            .unwrap_or_else(|| unsafe_getppid().expect("shadowenv bug: unable to get parent pid"));
-
-        match output::format_hook_error(err, pid, cmd.silent) {
-            Some(formatted) => Err(anyhow!(formatted)),
-            None => Err(anyhow!("")),
-        }
-    } else {
-        Ok(())
     }
 }
 
