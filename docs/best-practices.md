@@ -40,7 +40,7 @@ a locally-generated artifact and be generated entirely by user tooling. At Shopi
 This is not the only valid way to go though, you may get some mileage out of committing the files.
 Let us know what you do!
 
-## Propmt Widget
+## Prompt Widget
 
 You may find it helpful to have a visual indicator in your terminal that a
 Shadowenv is active. You can embed `$(shadowenv prompt-widget)` in your `PS1` or
