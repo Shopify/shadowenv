@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 blake2 = "0.10.6"
 clap = { version = "4.5.20", features = ["cargo", "derive"] }
+clap_complete = "4.5.35"
 dirs = "5.0.1"
 exec = "0.3.1"
 anyhow = "1.0.89"
@@ -29,6 +30,7 @@ rand = "0.8.5"
 
 [build-dependencies]
 clap = { version = "4.5.20", features = ["cargo", "derive"] }
+clap_complete = "4.5.35"
 
 [dev-dependencies]
 quickcheck = "1.0.3"

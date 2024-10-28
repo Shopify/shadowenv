@@ -1,15 +1,15 @@
 extern crate clap;
 
-// use clap::Shell;
-// use std::str::FromStr;
+use clap::{command, CommandFactory, ValueEnum};
+use clap_complete::{generate_to, Shell};
 
 include!("src/cli.rs");
 
 fn main() {
-    // let mut app = app();
-    // for shell_name in Shell::variants().iter() {
-    //     if let Ok(shell) = Shell::from_str(shell_name) {
-    //         app.gen_completions("shadowenv", shell, "sh/completions");
-    //     }
-    // }
+    for shell in Shell::value_variants() {
+        let mut cmd = ShadowenvApp::command();
+        let name = cmd.get_name().to_string();
+
+        generate_to(*shell, &mut cmd, name, "sh/completions").unwrap();
+    }
 }
