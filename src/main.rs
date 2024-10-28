@@ -8,6 +8,7 @@ mod init;
 mod lang;
 mod loader;
 mod output;
+mod prompt_widget;
 mod shadowenv;
 mod trust;
 mod undo;
@@ -50,6 +51,11 @@ fn main() {
             let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
             let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
             process::exit(diff::run(verbose, color, data));
+        }
+        ("prompt-widget", Some(matches)) => {
+            let legacy_fallback_data = matches.value_of("$__shadowenv_data").map(|d| d.to_string());
+            let data = Shadowenv::load_shadowenv_data_or_legacy_fallback(legacy_fallback_data);
+            process::exit(prompt_widget::run(data));
         }
         ("trust", Some(matches)) => {
             let dir = matches

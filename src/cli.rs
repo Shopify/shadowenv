@@ -154,4 +154,9 @@ pub fn app() -> App<'static, 'static> {
                         .about("Prints a script which can be eval'd by fish to set up shadowenv."),
                 )
         )
+        .subcommand(
+            SubCommand::with_name("prompt-widget")
+                .about("Print a little glyph you can include in a shell prompt to indicate that shadowenv is active.")
+                .setting(AppSettings::DisableHelpSubcommand)
+        )
 }
