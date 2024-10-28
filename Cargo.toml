@@ -1,12 +1,10 @@
 [package]
 name = "shadowenv"
-version = "2.1.2"
+version = "3.0.0"
 authors = [
-    "Burke Libbey <burke@libbey.me>",
-    "Lisa Ugray <lisa.ugray@shopify.com>",
-    "Aaron Olson <aaron.olson@shopify.com>",
+    "Shopify Engineering <careers@shopify.com>",
 ]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 blake2 = "0.10.6"
