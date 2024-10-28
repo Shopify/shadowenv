@@ -1,7 +1,6 @@
 use crate::hash::Source;
 use anyhow::Error;
 use std::{
-    borrow::Cow,
     env, fs, io, iter,
     path::{Path, PathBuf},
 };
@@ -130,7 +129,7 @@ fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, T
     let base_name_stringified = base_name.map(|f| f.to_string_lossy());
 
     // Must point to a SHADOWENV_DIR_NAME (e.g. `.shadowenv.d`).
-    if base_name_stringified != Some(Cow::Borrowed(SHADOWENV_DIR_NAME)) {
+    if base_name_stringified.as_deref() != Some(SHADOWENV_DIR_NAME) {
         return Err(TraversalError::InvalidLinkTarget {
             path_to_parent_link: parent_link.to_string_lossy().to_string(),
             parent_link_target: base_name_stringified.unwrap().to_string(),
@@ -146,7 +145,7 @@ fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, T
 
     // Must be an ancestor of the shadowenv we're coming from.
     // Unwrap is safe, we're always resolving to at least SHADOWENV_DIR_NAME.
-    if !from_shadowenv.starts_with(&resolved_parent.parent().unwrap()) {
+    if !from_shadowenv.starts_with(resolved_parent.parent().unwrap()) {
         return Err(TraversalError::NotAnAncestor {
             parent_link_target: resolved_parent.to_string_lossy().to_string(),
             shadowenv_path: from_shadowenv.to_string_lossy().to_string(),

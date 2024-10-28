@@ -47,21 +47,6 @@ pub fn print_activation_to_tty(
     let added_dirs: HashSet<PathBuf> = current_dirs.difference(&prev_dirs).cloned().collect();
     let removed_dirs: HashSet<PathBuf> = prev_dirs.difference(&current_dirs).cloned().collect();
 
-    let in_shadowenv = !current_dirs.is_empty();
-    let previously_in_shadowenv = !prev_dirs.is_empty();
-
-    let status = if in_shadowenv {
-        if previously_in_shadowenv {
-            "modified"
-        } else {
-            "activated"
-        }
-    } else if previously_in_shadowenv {
-        "deactivated"
-    } else {
-        return; // No change, nothing to print
-    };
-
     let feature_list = if !features.is_empty() {
         format!(
             " \x1b[1;34m{}",
