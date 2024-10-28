@@ -88,12 +88,15 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
     };
     match r_o_bytes? {
         Some(bytes) => {
-            let key = SigningKey::from_keypair_bytes(&bytes.try_into().unwrap())?;
-            Ok(key)
+            // We used to write the entire keypair to the file, but now we only write the private key.
+            // So it's important to take only the first 32 bytes here.
+            let key_bytes: [u8; 32] = bytes[..32].try_into()
+                .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+            Ok(SigningKey::from_bytes(&key_bytes))
         }
         None => {
             let mut csprng = OsRng {};
-            let seed = SigningKey::generate(&mut csprng);
+            let key = SigningKey::generate(&mut csprng);
 
             fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
             let mut file = match File::create(OsString::from(&path)) {
@@ -102,8 +105,9 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
                 Ok(f) => f,
             };
 
-            file.write_all(&seed.to_bytes())?;
-            Ok(seed)
+            // Write out just the 32-byte private key.
+            file.write_all(&key.to_bytes())?;
+            Ok(key)
         }
     }
 }
