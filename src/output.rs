@@ -21,20 +21,16 @@ const SHADOWENV: &str = concat!(
 const COOLDOWN_SECONDS: u64 = 5;
 
 fn cooldown() -> Duration {
-    Duration::new(COOLDOWN_SECONDS, 0)
+    Duration::from_secs(COOLDOWN_SECONDS)
 }
 
-pub fn handle_hook_error(err: Error, shellpid: u32, silent: bool) -> i32 {
-    if silent {
-        return 1;
+pub fn format_hook_error(err: Error, shellpid: u32, silent: bool) -> Option<String> {
+    if silent || matches!(check_and_trigger_cooldown(&err, shellpid), Ok(true)) {
+        return None;
     }
 
-    if let Ok(true) = check_and_trigger_cooldown(&err, shellpid) {
-        return 1;
-    };
     let err = backticks_to_bright_green(err);
-    eprintln!("{} \x1b[1;31mfailure: {}\x1b[0m", SHADOWENV, err);
-    1
+    Some(format!("{} \x1b[1;31mfailure: {}\x1b[0m", SHADOWENV, err))
 }
 
 pub fn print_activation_to_tty(

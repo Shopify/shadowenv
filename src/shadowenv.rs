@@ -27,11 +27,8 @@ pub struct Shadowenv {
 }
 
 impl Shadowenv {
-    pub fn load_shadowenv_data_or_legacy_fallback(fallback_data: Option<String>) -> String {
-        match env::var("__shadowenv_data") {
-            Ok(priority_data) => priority_data,
-            Err(_) => fallback_data.unwrap_or_default(),
-        }
+    pub fn from_env() -> String {
+        env::var("__shadowenv_data").unwrap_or_else(|_| "".to_owned())
     }
 
     pub fn new(
