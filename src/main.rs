@@ -16,14 +16,14 @@ mod undo;
 use crate::{hook::VariableOutputMode, shadowenv::Shadowenv};
 use anyhow::{anyhow, Error};
 use clap::Parser;
-use cli::{DiffCmd, ExecCmd, HookCmd};
+use cli::{ExecCmd, HookCmd};
 use std::{env, iter, path::PathBuf, process};
 
 fn main() {
     use cli::ShadowenvApp::*;
 
     let result = match cli::ShadowenvApp::parse() {
-        Diff(cmd) => Ok(run_diff(cmd)),
+        Diff(cmd) => Ok(diff::run(cmd)),
         Exec(cmd) => run_exec(cmd),
         Hook(cmd) => run_hook(cmd),
         Init(cmd) => Ok(init::run(cmd)),
@@ -38,13 +38,6 @@ fn main() {
 
         process::exit(1);
     }
-}
-
-fn run_diff(cmd: DiffCmd) {
-    let color = !cmd.no_color;
-    let data = Shadowenv::from_env();
-
-    diff::run(cmd.verbose, color, data);
 }
 
 fn run_hook(cmd: HookCmd) -> Result<(), Error> {

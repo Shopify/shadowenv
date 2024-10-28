@@ -1,3 +1,5 @@
+use crate::cli::DiffCmd;
+use crate::shadowenv::Shadowenv;
 use crate::undo;
 
 use std::collections::BTreeMap;
@@ -14,14 +16,17 @@ impl Logger for StdoutLogger {
     }
 }
 
-/// print a diff of the env
-pub fn run(verbose: bool, color: bool, shadowenv_data: String) {
+/// Print a diff of the env.
+pub fn run(cmd: DiffCmd) {
+    let color = !cmd.no_color;
+    let data = Shadowenv::from_env();
+
     run_with_logger(
         &mut StdoutLogger {},
         env::vars().collect(),
-        verbose,
+        cmd.verbose,
         color,
-        shadowenv_data,
+        data,
     )
 }
 
