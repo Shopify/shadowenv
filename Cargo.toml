@@ -1,6 +1,6 @@
 [package]
 name = "shadowenv"
-version = "3.0.0"
+version = "3.0.1"
 authors = [
     "Shopify Engineering <careers@shopify.com>",
 ]
