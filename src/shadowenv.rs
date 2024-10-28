@@ -1,6 +1,5 @@
-use anyhow::Error;
-
 use crate::{features::Feature, undo};
+use anyhow::Error;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     env,

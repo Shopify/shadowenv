@@ -1,13 +1,10 @@
-use crate::cli::DiffCmd;
-use crate::shadowenv::Shadowenv;
-use crate::undo;
-
-use std::collections::BTreeMap;
-use std::env;
+use crate::{cli::DiffCmd, shadowenv::Shadowenv, undo};
+use std::{collections::BTreeMap, env};
 
 trait Logger {
     fn print(&mut self, value: String);
 }
+
 struct StdoutLogger;
 
 impl Logger for StdoutLogger {
