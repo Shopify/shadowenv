@@ -124,14 +124,14 @@ pub fn run(dir: PathBuf) -> Result<(), Error> {
 }
 
 /// Trust the shadowenv dir at `root`. Assumes `root` points to a valid shadowenv directory.
-fn trust_dir(signer: &SigningKey, root: &PathBuf) -> Result<(), Error> {
+fn trust_dir(signer: &SigningKey, root: &Path) -> Result<(), Error> {
     let msg = root.to_string_lossy();
     let sig = signer.sign(msg.as_bytes());
 
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
-    let path = trust_file(&root, fingerprint);
+    let path = trust_file(root, fingerprint);
     let mut file = File::create(&path)?;
 
     write_gitignore(root)?;
@@ -139,7 +139,7 @@ fn trust_dir(signer: &SigningKey, root: &PathBuf) -> Result<(), Error> {
     Ok(file.write_all(&sig.to_bytes())?)
 }
 
-fn write_gitignore(root: &PathBuf) -> Result<(), Error> {
+fn write_gitignore(root: &Path) -> Result<(), Error> {
     let path = root.join(".gitignore");
 
     let r: Result<String, Error> = match fs::read_to_string(&path) {

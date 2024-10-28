@@ -10,7 +10,6 @@ use std::{
     path::PathBuf,
     result::Result,
     str::FromStr,
-    u64,
 };
 
 const FILE_SEPARATOR: &str = "\x1C";

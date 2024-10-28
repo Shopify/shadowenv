@@ -31,11 +31,11 @@ fn main() {
             let force = matches.is_present("force");
 
             let mode = match true {
-                true if matches.is_present("porcelain") => VariableOutputMode::PorcelainMode,
-                true if matches.is_present("fish") => VariableOutputMode::FishMode,
-                true if matches.is_present("json") => VariableOutputMode::JsonMode,
-                true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJsonMode,
-                _ => VariableOutputMode::PosixMode,
+                true if matches.is_present("porcelain") => VariableOutputMode::Porcelain,
+                true if matches.is_present("fish") => VariableOutputMode::Fish,
+                true if matches.is_present("json") => VariableOutputMode::Json,
+                true if matches.is_present("pretty-json") => VariableOutputMode::PrettyJson,
+                _ => VariableOutputMode::Posix,
             };
             if let Err(err) = hook::run(current_dir, data, mode, force) {
                 process::exit(output::handle_hook_error(

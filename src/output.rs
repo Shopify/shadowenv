@@ -78,7 +78,7 @@ fn dir_diff(added_dirs: HashSet<PathBuf>, removed_dirs: HashSet<PathBuf>) -> Opt
     output.push_str("\x1b[38;5;240m[");
 
     if !added_dirs.is_empty() {
-        output.push_str(&"\x1b[0;32m");
+        output.push_str("\x1b[0;32m");
         output.push_str(&"+".repeat(added_dirs.len()));
     }
 
@@ -87,7 +87,7 @@ fn dir_diff(added_dirs: HashSet<PathBuf>, removed_dirs: HashSet<PathBuf>) -> Opt
     }
 
     if !removed_dirs.is_empty() {
-        output.push_str(&"\x1b[0;31m");
+        output.push_str("\x1b[0;31m");
         output.push_str(&"-".repeat(removed_dirs.len()));
     }
 

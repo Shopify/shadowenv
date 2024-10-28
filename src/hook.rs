@@ -12,11 +12,11 @@ use shell_escape as shell;
 use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
 
 pub enum VariableOutputMode {
-    FishMode,
-    PorcelainMode,
-    PosixMode,
-    JsonMode,
-    PrettyJsonMode,
+    Fish,
+    Porcelain,
+    Posix,
+    Json,
+    PrettyJson,
 }
 
 #[derive(Serialize, Debug)]
@@ -153,7 +153,7 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
 
 pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
     match mode {
-        VariableOutputMode::PosixMode => {
+        VariableOutputMode::Posix => {
             for (k, v) in shadowenv.exports()? {
                 match v {
                     Some(s) => println!("export {}={}", k, shell_escape(&s)),
@@ -166,7 +166,7 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                 shadowenv.features(),
             );
         }
-        VariableOutputMode::FishMode => {
+        VariableOutputMode::Fish => {
             for (k, v) in shadowenv.exports()? {
                 match v {
                     Some(s) => {
@@ -188,7 +188,7 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                 shadowenv.features(),
             );
         }
-        VariableOutputMode::PorcelainMode => {
+        VariableOutputMode::Porcelain => {
             // three fields: <operation> : <name> : <value>
             // opcodes: 1: set, unexported (unused)
             //          2: set, exported
@@ -202,11 +202,11 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                 }
             }
         }
-        VariableOutputMode::JsonMode => {
+        VariableOutputMode::Json => {
             let modifs = Modifications::new(shadowenv.exports()?);
             println!("{}", serde_json::to_string(&modifs).unwrap());
         }
-        VariableOutputMode::PrettyJsonMode => {
+        VariableOutputMode::PrettyJson => {
             let modifs = Modifications::new(shadowenv.exports()?);
             println!("{}", serde_json::to_string_pretty(&modifs).unwrap());
         }
