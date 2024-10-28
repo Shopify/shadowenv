@@ -1,6 +1,6 @@
 mod cli;
 mod diff;
-mod execcmd;
+mod exec_cmd;
 mod features;
 mod hash;
 mod hook;
@@ -13,18 +13,16 @@ mod shadowenv;
 mod trust;
 mod undo;
 
-use crate::shadowenv::Shadowenv;
 use anyhow::{anyhow, Error};
 use clap::Parser;
-use cli::ExecCmd;
-use std::{env, iter, path::PathBuf, process};
+use std::{env, path::PathBuf, process};
 
 fn main() {
     use cli::ShadowenvApp::*;
 
     let result = match cli::ShadowenvApp::parse() {
         Diff(cmd) => Ok(diff::run(cmd)),
-        Exec(cmd) => run_exec(cmd),
+        Exec(cmd) => exec_cmd::run(cmd),
         Hook(cmd) => hook::run(cmd),
         Init(cmd) => Ok(init::run(cmd)),
         Trust(_) => trust::run(),
@@ -38,17 +36,6 @@ fn main() {
 
         process::exit(1);
     }
-}
-
-fn run_exec(cmd: ExecCmd) -> Result<(), Error> {
-    let data = Shadowenv::from_env();
-    let pathbuf = cmd
-        .dir
-        .map(|d| PathBuf::from(d))
-        .unwrap_or(get_current_dir_or_exit());
-
-    let argv = iter::once(cmd.cmd).chain(cmd.cmd_argv);
-    execcmd::run(pathbuf, data, argv.collect())
 }
 
 fn get_current_dir_or_exit() -> PathBuf {
