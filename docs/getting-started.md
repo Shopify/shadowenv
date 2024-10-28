@@ -132,3 +132,16 @@ shadowenv exec -- nginx -g 'daemon off;'
 
 In this case, we didn't need to load the Shadowenv shell hook, as `shadowenv exec` loaded the
 environments before executing nginx.
+
+# Nested Shadowenvs
+
+Shadowenv supports nested environments. In order for a shadowenv to inherit from
+another shadowenv further up the path, create a symlink at
+`.shadowenv.d/parent` to the higher `.shadowenv.d`. For example:
+
+```
+ln -s /a/.shadowenv.d /a/b/c/.shadowenv.d/parent
+```
+
+When this is done, shadowlisp files in `a` will be evaluated before those in
+`c`.
