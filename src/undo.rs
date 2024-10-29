@@ -10,6 +10,7 @@ pub struct Scalar {
     pub original: Option<String>,
     #[serde(default)]
     pub current: Option<String>,
+    #[serde(default)]
     pub no_clobber: bool,
 }
 
