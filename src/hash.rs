@@ -133,7 +133,7 @@ impl SourceList {
     }
 
     pub fn hash(&self) -> Option<u64> {
-        if self.sources.iter().any(|source| source.hash().is_none()) {
+        if self.sources.is_empty() || self.sources.iter().any(|source| source.hash().is_none()) {
             return None;
         }
 
