@@ -238,4 +238,41 @@ mod tests {
 
         (a.is_none() && b.is_none()) || (a.is_some() && b.is_some() && a.unwrap() == b.unwrap())
     }
+
+    #[test]
+    fn test_empty_source_list() {
+        let list = SourceList::new();
+        assert!(list.is_empty());
+        assert_eq!(list.hash(), None);
+        assert!(list.shortened_dirs().is_empty());
+    }
+
+    #[test]
+    fn test_source_list_ordering() {
+        let mut source1 = Source::new("dir1".to_string());
+        source1.add_file("file1.txt".to_string(), "content1".to_string());
+        
+        let mut source2 = Source::new("dir2".to_string());
+        source2.add_file("file2.txt".to_string(), "content2".to_string());
+
+        let list = SourceList::new_with_sources(vec![source1.clone(), source2.clone()]);
+        let consumed = list.consume();
+        assert_eq!(consumed.len(), 2);
+        assert_eq!(consumed[0].dir, "dir1");
+        assert_eq!(consumed[1].dir, "dir2");
+    }
+
+    #[test]
+    fn test_path_shortening() {
+        let mut list = SourceList::new();
+        let source1 = Source::new("/home/user/project/src/dir1".to_string());
+        let source2 = Source::new("/home/user/project/src/dir2".to_string());
+        list.prepend_source(source2);
+        list.prepend_source(source1);
+
+        let shortened = list.shortened_dirs();
+        assert_eq!(shortened.len(), 2);
+        assert_eq!(shortened[0].to_str().unwrap(), "dir1");
+        assert_eq!(shortened[1].to_str().unwrap(), "dir2");
+    }
 }
