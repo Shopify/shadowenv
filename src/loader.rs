@@ -101,28 +101,19 @@ fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, T
         Err(_) => return Ok(vec![]),
     };
 
-    let previous_working_dir = env::current_dir().unwrap();
-    env::set_current_dir(from_shadowenv).unwrap();
-
     // Must be a valid symlink.
     // We need to resolve the symlink in context of the .shadowenv.d folder it is in.
     let resolved_parent = fs::read_link(&parent_link)
-        .and_then(|resolved| resolved.canonicalize())
-        .map_err(|err| {
-            env::set_current_dir(&previous_working_dir).unwrap();
-
-            TraversalError::ResolveError {
-                parent_link_path: parent_link.to_string_lossy().to_string(),
-                error: if metadata.is_symlink() {
-                    err.to_string()
-                } else {
-                    "Not a symlink".to_owned()
-                },
-            }
+        .map(|link_target| from_shadowenv.join(link_target))
+        .and_then(|path| path.canonicalize())
+        .map_err(|err| TraversalError::ResolveError {
+            parent_link_path: parent_link.to_string_lossy().to_string(),
+            error: if metadata.is_symlink() {
+                err.to_string()
+            } else {
+                "Not a symlink".to_owned()
+            },
         })?;
-
-    // Restore working directory.
-    env::set_current_dir(previous_working_dir).unwrap();
 
     // TODO: Refactor into better structure with the options.
     let base_name = resolved_parent.file_name();
