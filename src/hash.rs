@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn test_mixed_source_hashing() {
-        let mut empty_source = Source::new("empty_dir".to_string());
+        let empty_source = Source::new("empty_dir".to_string());
         let mut normal_source = Source::new("normal_dir".to_string());
         normal_source.add_file("file.txt".to_string(), "content".to_string());
 
