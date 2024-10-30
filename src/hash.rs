@@ -275,4 +275,65 @@ mod tests {
         assert_eq!(shortened[0].to_str().unwrap(), "dir1");
         assert_eq!(shortened[1].to_str().unwrap(), "dir2");
     }
+
+    #[test]
+    fn test_source_file_ordering() {
+        let mut source = Source::new("test_dir".to_string());
+        source.add_file("b.txt".to_string(), "content b".to_string());
+        source.add_file("a.txt".to_string(), "content a".to_string());
+        source.add_file("c.txt".to_string(), "content c".to_string());
+
+        // Files should maintain insertion order
+        assert_eq!(source.files[0].name, "b.txt");
+        assert_eq!(source.files[1].name, "a.txt");
+        assert_eq!(source.files[2].name, "c.txt");
+    }
+
+    #[test]
+    fn test_source_list_prepend() {
+        let mut list = SourceList::new();
+        
+        let mut source1 = Source::new("dir1".to_string());
+        source1.add_file("file1.txt".to_string(), "content1".to_string());
+        
+        let mut source2 = Source::new("dir2".to_string());
+        source2.add_file("file2.txt".to_string(), "content2".to_string());
+        
+        let mut source3 = Source::new("dir3".to_string());
+        source3.add_file("file3.txt".to_string(), "content3".to_string());
+
+        list.prepend_source(source1);
+        list.prepend_source(source2);
+        list.prepend_source(source3);
+
+        let consumed = list.consume();
+        assert_eq!(consumed.len(), 3);
+        assert_eq!(consumed[0].dir, "dir3"); // Last prepended = first
+        assert_eq!(consumed[1].dir, "dir2");
+        assert_eq!(consumed[2].dir, "dir1"); // First prepended = last
+    }
+
+    #[test]
+    fn test_hash_with_empty_files() {
+        let mut source = Source::new("test_dir".to_string());
+        source.add_file("empty.txt".to_string(), "".to_string());
+        
+        // A source with empty files should still have a valid hash
+        assert!(source.hash().is_some());
+
+        let list = SourceList::new_with_sources(vec![source]);
+        assert!(list.hash().is_some());
+    }
+
+    #[test]
+    fn test_mixed_source_hashing() {
+        let mut empty_source = Source::new("empty_dir".to_string());
+        let mut normal_source = Source::new("normal_dir".to_string());
+        normal_source.add_file("file.txt".to_string(), "content".to_string());
+
+        let list = SourceList::new_with_sources(vec![empty_source, normal_source]);
+        
+        // If any source has no files (thus no hash), the entire list should have no hash
+        assert_eq!(list.hash(), None);
+    }
 }
