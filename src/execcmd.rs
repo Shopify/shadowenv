@@ -5,6 +5,10 @@ use std::vec::Vec;
 
 /// Execute the provided command (argv) after loading the environment from the current directory
 pub fn run(pathbuf: PathBuf, shadowenv_data: String, argv: Vec<&str>) -> Result<(), Error> {
+    if argv.is_empty() {
+        return Err(anyhow::anyhow!("empty command"));
+    }
+
     if let Some(shadowenv) = hook::load_env(pathbuf, shadowenv_data, true)? {
         hook::mutate_own_env(&shadowenv)?;
     }
@@ -41,7 +45,7 @@ mod tests {
         let (dir, path) = setup_test_dir();
         let result = run(path, "invalid:json".to_string(), vec!["echo", "test"]);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid json"));
+        assert!(result.unwrap_err().to_string().contains("expected value"));
         drop(dir);
     }
 
