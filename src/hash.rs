@@ -26,22 +26,10 @@ pub struct Source {
     pub files: Vec<SourceFile>,
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, PartialOrd, Ord)]
 pub struct SourceFile {
     pub name: String,
     pub contents: String,
-}
-
-impl Ord for SourceFile {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.name.cmp(&other.name)
-    }
-}
-
-impl PartialOrd for SourceFile {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 impl PartialEq for SourceFile {
@@ -60,12 +48,15 @@ pub struct Hash {
 struct WrongInputSize;
 
 impl Source {
-    pub fn new(dir: String) -> Self {
-        Source { dir, files: vec![] }
+    pub fn new<S: Into<String>>(dir: S) -> Self {
+        Source { dir: dir.into(), files: vec![] }
     }
 
-    pub fn add_file(&mut self, name: String, contents: String) {
-        self.files.push(SourceFile { name, contents })
+    pub fn add_file<S: Into<String>>(&mut self, name: S, contents: S) {
+        self.files.push(SourceFile { 
+            name: name.into(), 
+            contents: contents.into() 
+        })
     }
 
     pub fn hash(&self) -> Option<u64> {
@@ -191,15 +182,6 @@ mod tests {
     use quickcheck::Gen;
     use quickcheck_macros::quickcheck;
 
-    #[test]
-    fn test_key_encoding() {
-        let key = Hash { hash: 2 };
-        let hex = key.to_string();
-        assert_eq!("0000000000000002", hex);
-        let key2: Hash = Hash::from_str(&hex).unwrap();
-        assert_eq!(key, key2);
-    }
-
     impl Arbitrary for Source {
         fn arbitrary(g: &mut Gen) -> Source {
             Source {
@@ -224,6 +206,15 @@ mod tests {
                 hash: Arbitrary::arbitrary(g),
             }
         }
+    }
+
+    #[test]
+    fn test_key_encoding() {
+        let key = Hash { hash: 2 };
+        let hex = key.to_string();
+        assert_eq!("0000000000000002", hex);
+        let key2: Hash = Hash::from_str(&hex).unwrap();
+        assert_eq!(key, key2);
     }
 
     #[quickcheck]

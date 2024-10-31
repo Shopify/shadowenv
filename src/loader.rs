@@ -351,6 +351,25 @@ mod tests {
     }
 
     #[test]
+    fn find_shadowenv_paths_no_filename() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().canonicalize().unwrap();
+        let shadowenv = base_path.join("sub/.shadowenv.d");
+
+        create_all(&[&shadowenv]);
+
+        // Create symlink to root directory which has no filename component
+        symlink("/", &shadowenv.join(SHADOWENV_PARENT_LINK_NAME)).unwrap();
+
+        let err = find_shadowenv_paths(shadowenv.parent().unwrap()).unwrap_err();
+        if let TraversalError::InvalidLinkTarget { path_to_parent_link, parent_link_target } = err {
+            assert!(parent_link_target.is_empty());
+        } else {
+            panic!("Expected InvalidLinkTarget error");
+        }
+    }
+
+    #[test]
     fn find_shadowenv_paths_not_a_symlink() {
         let temp_dir = tempdir().unwrap();
         let base_path = temp_dir.path().canonicalize().unwrap();
