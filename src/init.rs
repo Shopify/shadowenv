@@ -31,7 +31,6 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use tempfile::NamedTempFile;
 
     #[test]
     fn test_run_valid_shells() {
@@ -68,20 +67,18 @@ mod tests {
         assert!(!output_str.contains("@HOOKBOOK@"));
     }
 
-    use std::io::Write;
+    use std::io::{self, Write};
 
     // Helper function to capture stdout during tests
     #[cfg(test)]
     fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
     where F: FnOnce() {
-        use std::mem;
-        let old = std::io::stdout();
-        let mut handle = std::io::BufWriter::new(buf);
-        // Temporarily redirect stdout
-        let _ = std::io::set_print(Some(Box::new(&mut handle)));
-        f();
-        handle.flush().unwrap();
-        // Restore stdout
-        let _ = std::io::set_print(Some(Box::new(old)));
+        let mut stdout = io::stdout();
+        let mut handle = io::BufWriter::new(buf);
+        {
+            let _lock = stdout.lock();
+            f();
+            handle.flush().unwrap();
+        }
     }
 }
