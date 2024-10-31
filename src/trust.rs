@@ -29,9 +29,10 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_load_or_generate_signer() {
+    fn test_load_or_generate_signer() -> Result<(), Box<dyn std::error::Error>> {
         let signer = load_or_generate_signer()?;
         assert_eq!(signer.to_bytes().len(), 32);
+        Ok(())
     }
 
     #[test]
