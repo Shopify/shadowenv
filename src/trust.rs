@@ -26,7 +26,6 @@ pub struct NotTrusted {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[test]
