@@ -193,9 +193,9 @@ fn should_print_activation() -> bool {
 mod tests {
     use super::*;
     use anyhow::anyhow;
-    use std::path::PathBuf;
     use std::env;
     use std::fs::File;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[test]
@@ -265,7 +265,7 @@ mod tests {
         added.insert(PathBuf::from("/test/path1"));
         added.insert(PathBuf::from("/test/path2"));
         let removed = HashSet::new();
-        
+
         let result = dir_diff(added, removed).unwrap();
         assert!(result.contains("\x1b[0;32m++"));
         assert!(!result.contains("|"));
@@ -278,7 +278,7 @@ mod tests {
         let mut removed = HashSet::new();
         removed.insert(PathBuf::from("/test/path1"));
         removed.insert(PathBuf::from("/test/path2"));
-        
+
         let result = dir_diff(added, removed).unwrap();
         assert!(!result.contains("+"));
         assert!(!result.contains("|"));
@@ -291,7 +291,7 @@ mod tests {
         added.insert(PathBuf::from("/test/path1"));
         let mut removed = HashSet::new();
         removed.insert(PathBuf::from("/test/path2"));
-        
+
         let result = dir_diff(added, removed).unwrap();
         assert!(result.contains("\x1b[0;32m+"));
         assert!(result.contains("\x1b[38;5;240m|"));
@@ -302,7 +302,7 @@ mod tests {
     fn test_cooldown_functionality() {
         let temp_dir = tempdir().unwrap();
         let root = temp_dir.path().to_path_buf();
-        
+
         // Test creating cooldown sentinel
         let sentinel_path = root.join(".error-0-12345");
         assert!(create_cooldown_sentinel(sentinel_path.clone()).is_ok());
@@ -314,11 +314,15 @@ mod tests {
         // Test with expired cooldown
         let old_sentinel_path = root.join(".error-1-12345");
         File::create(&old_sentinel_path).unwrap();
-        
+
         // Set old modification time
         let old_time = SystemTime::now() - Duration::from_secs(COOLDOWN_SECONDS + 1);
-        filetime::set_file_mtime(&old_sentinel_path, filetime::FileTime::from_system_time(old_time)).unwrap();
-        
+        filetime::set_file_mtime(
+            &old_sentinel_path,
+            filetime::FileTime::from_system_time(old_time),
+        )
+        .unwrap();
+
         assert!(!check_cooldown_sentinel(&old_sentinel_path, cooldown()).unwrap());
     }
 
@@ -338,7 +342,8 @@ mod tests {
 
         // Make stale_error old
         let old_time = SystemTime::now() - Duration::from_secs(301); // Just over 5 minutes
-        filetime::set_file_mtime(&stale_error, filetime::FileTime::from_system_time(old_time)).unwrap();
+        filetime::set_file_mtime(&stale_error, filetime::FileTime::from_system_time(old_time))
+            .unwrap();
 
         // Clean up stale errors
         clean_up_stale_errors(&root, Duration::from_secs(300)).unwrap();
@@ -353,7 +358,7 @@ mod tests {
     fn test_err_file_generation() {
         let temp_dir = tempdir().unwrap();
         let root = temp_dir.path().to_path_buf();
-        
+
         let err_path = err_file(&root, 0, 12345).unwrap();
         assert_eq!(err_path, root.join(".error-0-12345"));
     }
@@ -372,12 +377,12 @@ mod tests {
 
         // Test with cooldown error (NotTrusted)
         let trust_error = anyhow::Error::from(trust::NotTrusted {
-            untrusted_directories: vec!["test".to_string()]
+            untrusted_directories: vec!["test".to_string()],
         });
-        
+
         // First trigger should return false (not on cooldown)
         assert!(!check_and_trigger_cooldown(&trust_error, 12345).unwrap());
-        
+
         // Second trigger should return true (on cooldown)
         assert!(check_and_trigger_cooldown(&trust_error, 12345).unwrap());
     }

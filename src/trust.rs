@@ -37,7 +37,10 @@ mod tests {
 
     #[test]
     fn test_load_or_generate_signer_corrupted_key_file() {
-        let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME").unwrap());
+        let path = format!(
+            "{}/.config/shadowenv/trust-key-v2",
+            env::var("HOME").unwrap()
+        );
         fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
         let mut file = File::create(&path).unwrap();
         file.write_all(b"corrupted_key_data").unwrap(); // Write corrupted key data
@@ -48,7 +51,10 @@ mod tests {
 
     #[test]
     fn test_load_or_generate_signer_invalid_key_length() {
-        let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME").unwrap());
+        let path = format!(
+            "{}/.config/shadowenv/trust-key-v2",
+            env::var("HOME").unwrap()
+        );
         fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
         let mut file = File::create(&path).unwrap();
         file.write_all(&[0u8; 31]).unwrap(); // Write an invalid key length
@@ -89,7 +95,10 @@ mod tests {
 
         let result = run(path);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err().downcast_ref::<NoShadowenv>(), Some(_)));
+        assert!(matches!(
+            result.unwrap_err().downcast_ref::<NoShadowenv>(),
+            Some(_)
+        ));
     }
 
     #[test]
@@ -236,7 +245,8 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
         Some(bytes) => {
             // We used to write the entire keypair to the file, but now we only write the private key.
             // So it's important to take only the first 32 bytes here.
-            let key_bytes: [u8; 32] = bytes[..32].try_into()
+            let key_bytes: [u8; 32] = bytes[..32]
+                .try_into()
                 .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
             Ok(SigningKey::from_bytes(&key_bytes))
         }

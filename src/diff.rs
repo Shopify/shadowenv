@@ -6,70 +6,66 @@ use std::env;
 trait Logger {
     fn print(&mut self, value: String);
 }
-    fn test_colored_output() {
-        let mut logger = DummyLogger::default();
+fn test_colored_output() {
+    let mut logger = DummyLogger::default();
 
-        let env_vars = vec![("VAR_A".to_string(), "/added:/existent".to_string())];
+    let env_vars = vec![("VAR_A".to_string(), "/added:/existent".to_string())];
 
-        let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
-        let result = run_with_logger(&mut logger, env_vars, false, true, data.to_string());
+    let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
+    let result = run_with_logger(&mut logger, env_vars, false, true, data.to_string());
 
-        let expected: Vec<_> = [
-            "\x1b[92m+ VAR_A=/added:/existent\x1b[0m\x1b[K",
-        ]
+    let expected: Vec<_> = ["\x1b[92m+ VAR_A=/added:/existent\x1b[0m\x1b[K"]
         .iter()
         .map(ToString::to_string)
         .collect();
-        assert_eq!(result, 0);
-        assert_eq!(logger.0, expected);
-    }
+    assert_eq!(result, 0);
+    assert_eq!(logger.0, expected);
+}
 
-    #[test]
-    fn test_verbose_mode() {
-        let mut logger = DummyLogger::default();
+#[test]
+fn test_verbose_mode() {
+    let mut logger = DummyLogger::default();
 
-        let env_vars = vec![("VAR_A".to_string(), "/existent".to_string())];
+    let env_vars = vec![("VAR_A".to_string(), "/existent".to_string())];
 
-        let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[]}"#;
-        let result = run_with_logger(&mut logger, env_vars, true, false, data.to_string());
+    let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[]}"#;
+    let result = run_with_logger(&mut logger, env_vars, true, false, data.to_string());
 
-        let expected: Vec<_> = [
-            "  VAR_A=/existent",
-        ]
+    let expected: Vec<_> = ["  VAR_A=/existent"]
         .iter()
         .map(ToString::to_string)
         .collect();
-        assert_eq!(result, 0);
-        assert_eq!(logger.0, expected);
-    }
+    assert_eq!(result, 0);
+    assert_eq!(logger.0, expected);
+}
 
-    #[test]
-    fn test_empty_env_vars() {
-        let mut logger = DummyLogger::default();
+#[test]
+fn test_empty_env_vars() {
+    let mut logger = DummyLogger::default();
 
-        let env_vars = vec![];
+    let env_vars = vec![];
 
-        let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[]}"#;
-        let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
+    let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[]}"#;
+    let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
 
-        let expected: Vec<String> = vec![];
-        assert_eq!(result, 0);
-        assert_eq!(logger.0, expected);
-    }
+    let expected: Vec<String> = vec![];
+    assert_eq!(result, 0);
+    assert_eq!(logger.0, expected);
+}
 
-    #[test]
-    fn test_missing_shadowenv_data() {
-        let mut logger = DummyLogger::default();
+#[test]
+fn test_missing_shadowenv_data() {
+    let mut logger = DummyLogger::default();
 
-        let env_vars = vec![("VAR_A".to_string(), "/existent".to_string())];
+    let env_vars = vec![("VAR_A".to_string(), "/existent".to_string())];
 
-        let data = r#""#;
-        let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
+    let data = r#""#;
+    let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
 
-        let expected: Vec<String> = vec![];
-        assert_eq!(result, 0);
-        assert_eq!(logger.0, expected);
-    }
+    let expected: Vec<String> = vec![];
+    assert_eq!(result, 0);
+    assert_eq!(logger.0, expected);
+}
 #[derive(Default)]
 struct DummyLogger(Vec<String>);
 

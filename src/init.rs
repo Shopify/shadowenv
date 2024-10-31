@@ -13,7 +13,7 @@ pub fn run(shellname: &str) -> i32 {
                 "invalid shell name '{}' (must be one of bash, zsh, fish)",
                 shellname
             );
-            return 1
+            return 1;
         }
     }
 }
@@ -48,12 +48,12 @@ mod tests {
     fn test_print_script_substitution() {
         let test_path = PathBuf::from("/test/path/shadowenv");
         let test_script = b"#!/bin/sh\nPATH=@SELF@\n@HOOKBOOK@\n";
-        
+
         let hookbook = String::from_utf8_lossy(include_bytes!("../sh/hookbook.sh"));
         let script = String::from_utf8_lossy(test_script);
         let script = script.replace("@SELF@", test_path.into_os_string().to_str().unwrap());
         let script = script.replace("@HOOKBOOK@", &hookbook);
-        
+
         assert!(script.contains("PATH=/test/path/shadowenv"));
         assert!(!script.contains("@SELF@"));
         assert!(!script.contains("@HOOKBOOK@"));

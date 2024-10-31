@@ -348,30 +348,30 @@ mod tests {
         shadowenv.add_feature("node", None);
 
         let features = shadowenv.features();
-        assert!(features.iter().any(|f| f.name() == "rust" && f.version() == Some("1.70.0")));
-        assert!(features.iter().any(|f| f.name() == "python" && f.version() == Some("3.9")));
-        assert!(features.iter().any(|f| f.name() == "node" && f.version() == None));
+        assert!(features
+            .iter()
+            .any(|f| f.name() == "rust" && f.version() == Some("1.70.0")));
+        assert!(features
+            .iter()
+            .any(|f| f.name() == "python" && f.version() == Some("3.9")));
+        assert!(features
+            .iter()
+            .any(|f| f.name() == "node" && f.version() == None));
     }
 
     #[test]
     fn test_shadowenv_directory_tracking() {
         let env = HashMap::new();
         let mut data = undo::Data::default();
-        
+
         // Set up previous directories
-        let prev_dirs = vec![
-            PathBuf::from("/prev/dir1"),
-            PathBuf::from("/prev/dir2"),
-        ];
+        let prev_dirs = vec![PathBuf::from("/prev/dir1"), PathBuf::from("/prev/dir2")];
         data.prev_dirs = prev_dirs.iter().cloned().collect();
-        
+
         let mut shadowenv = Shadowenv::new(env, data, 0);
-        
+
         // Add new directories
-        let new_dirs = vec![
-            PathBuf::from("/new/dir1"),
-            PathBuf::from("/new/dir2"),
-        ];
+        let new_dirs = vec![PathBuf::from("/new/dir1"), PathBuf::from("/new/dir2")];
         shadowenv.add_dirs(new_dirs.clone());
 
         // Verify previous and current directories
@@ -383,7 +383,7 @@ mod tests {
     fn test_complex_pathlist_operations() {
         let mut env = HashMap::new();
         env.insert("PATH".to_string(), "/usr/bin:/usr/local/bin".to_string());
-        
+
         let data = undo::Data::default();
         let mut shadowenv = Shadowenv::new(env, data, 0);
 
@@ -403,7 +403,7 @@ mod tests {
     fn test_shadowenv_data_serialization() {
         let mut env = HashMap::new();
         env.insert("ORIGINAL".to_string(), "value".to_string());
-        
+
         let data = undo::Data::default();
         let mut shadowenv = Shadowenv::new(env, data, 0x123456789ABCDEF0);
 
@@ -414,7 +414,7 @@ mod tests {
 
         // Get serialized data
         let result = shadowenv.format_shadowenv_data().unwrap();
-        
+
         // Verify format and content
         assert!(result.starts_with("123456789abcdef0:"));
         assert!(result.contains("\"TEST_VAR\""));
@@ -426,7 +426,7 @@ mod tests {
     fn test_no_clobber_behavior() {
         let mut env = HashMap::new();
         env.insert("PROTECTED".to_string(), "original".to_string());
-        
+
         let mut data = undo::Data::default();
         data.scalars.push(undo::Scalar {
             name: "PROTECTED".to_string(),

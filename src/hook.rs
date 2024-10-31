@@ -221,9 +221,9 @@ fn shell_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
     use std::fs;
     use tempfile::tempdir;
-    use std::collections::HashMap;
     #[test]
     fn load_trusted_source_returns_an_error_for_untrusted_folders() {
         let temp_dir = tempdir().unwrap();
@@ -288,7 +288,7 @@ mod tests {
 
         let data = undo::Data::default();
         let mut shadowenv = Shadowenv::new(initial_env, data, 0);
-        
+
         // Apply mutations directly
         shadowenv.set("NEW_VAR", Some("new_value"));
         shadowenv.set("EXISTING_VAR", Some("modified"));
