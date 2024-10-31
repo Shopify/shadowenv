@@ -219,4 +219,114 @@ mod tests {
         assert!(result.is_err());
         drop(dir);
     }
+
+    #[test]
+    fn test_run_with_pathlist_operations() {
+        let (dir, path) = setup_test_dir();
+        
+        // Test pathlist operations (append/prepend/remove)
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_PATH","value":"/initial/path"},
+                {"op":"append","name":"TEST_PATH","value":"/appended/path"},
+                {"op":"prepend","name":"TEST_PATH","value":"/prepended/path"}
+            ]
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        // Verify pathlist operations were applied correctly
+        assert_eq!(env::var("TEST_PATH").unwrap(), "/prepended/path:/initial/path:/appended/path");
+        
+        env::remove_var("TEST_PATH");
+        assert!(result.is_err());
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_no_clobber() {
+        let (dir, path) = setup_test_dir();
+        
+        // Set up initial environment
+        env::set_var("PROTECTED_VAR", "original_value");
+        
+        // Create shadowenv data with no_clobber flag
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"PROTECTED_VAR","value":"new_value","no_clobber":true}
+            ]
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        // Verify protected variable wasn't modified
+        assert_eq!(env::var("PROTECTED_VAR").unwrap(), "original_value");
+        
+        env::remove_var("PROTECTED_VAR");
+        assert!(result.is_err());
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_multiple_shadowenv_data() {
+        let (dir, path) = setup_test_dir();
+        
+        // First set of mutations
+        let shadowenv_data1 = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_VAR","value":"initial_value"}
+            ]
+        }"#;
+        
+        // Run first command
+        let _ = run(path.clone(), shadowenv_data1.to_string(), vec!["nonexistent_command"]);
+        
+        // Second set of mutations
+        let shadowenv_data2 = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_VAR","value":"updated_value"}
+            ]
+        }"#;
+        
+        // Run second command
+        let result = run(path, shadowenv_data2.to_string(), vec!["nonexistent_command"]);
+        
+        // Verify final state
+        assert_eq!(env::var("TEST_VAR").unwrap(), "updated_value");
+        
+        env::remove_var("TEST_VAR");
+        assert!(result.is_err());
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_features() {
+        let (dir, path) = setup_test_dir();
+        
+        // Create shadowenv data that includes features
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_VAR","value":"test_value"}
+            ],
+            "features": [
+                {"name": "test_feature", "version": "1.0"},
+                {"name": "another_feature"}
+            ]
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        // We can't directly test features as they're internal to Shadowenv,
+        // but we can verify the environment variable was set
+        assert_eq!(env::var("TEST_VAR").unwrap(), "test_value");
+        
+        env::remove_var("TEST_VAR");
+        assert!(result.is_err());
+        drop(dir);
+    }
 }
