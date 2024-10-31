@@ -444,11 +444,6 @@ mod tests {
         assert_eq!(shadowenv.get("PROTECTED"), Some("original".to_string()));
         assert!(shadowenv.should_not_clobber("PROTECTED"));
     }
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect::<HashMap<_, _>>();
-        Shadowenv::new(env, data, 123456789)
-    }
 
     #[test]
     fn test_get_set() {
