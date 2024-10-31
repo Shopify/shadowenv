@@ -6,6 +6,9 @@ authors = [
 ]
 edition = "2021"
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 blake2 = "0.10.6"
 clap = "2.32.0"
