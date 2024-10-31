@@ -5,7 +5,7 @@ use std::env;
 
 trait Logger {
     fn print(&mut self, value: String);
-    #[test]
+}
     fn test_colored_output() {
         let mut logger = DummyLogger::default();
 
