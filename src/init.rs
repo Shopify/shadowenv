@@ -16,7 +16,6 @@ pub fn run(shellname: &str) -> i32 {
             return 1
         }
     }
-    0
 }
 
 fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
