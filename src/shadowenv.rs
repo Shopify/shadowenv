@@ -337,6 +337,120 @@ mod tests {
     }
 
     #[test]
+    fn test_shadowenv_feature_management() {
+        let mut env = HashMap::new();
+        let data = undo::Data::default();
+        let mut shadowenv = Shadowenv::new(env, data, 0);
+
+        // Test adding features
+        shadowenv.add_feature("rust", Some("1.70.0"));
+        shadowenv.add_feature("python", Some("3.9"));
+        shadowenv.add_feature("node", None);
+
+        let features = shadowenv.features();
+        assert!(features.iter().any(|f| f.name == "rust" && f.version == Some("1.70.0".to_string())));
+        assert!(features.iter().any(|f| f.name == "python" && f.version == Some("3.9".to_string())));
+        assert!(features.iter().any(|f| f.name == "node" && f.version == None));
+    }
+
+    #[test]
+    fn test_shadowenv_directory_tracking() {
+        let env = HashMap::new();
+        let mut data = undo::Data::default();
+        
+        // Set up previous directories
+        let prev_dirs = vec![
+            PathBuf::from("/prev/dir1"),
+            PathBuf::from("/prev/dir2"),
+        ];
+        data.prev_dirs = prev_dirs.iter().cloned().collect();
+        
+        let mut shadowenv = Shadowenv::new(env, data, 0);
+        
+        // Add new directories
+        let new_dirs = vec![
+            PathBuf::from("/new/dir1"),
+            PathBuf::from("/new/dir2"),
+        ];
+        shadowenv.add_dirs(new_dirs.clone());
+
+        // Verify previous and current directories
+        assert_eq!(shadowenv.prev_dirs(), prev_dirs.iter().cloned().collect());
+        assert_eq!(shadowenv.current_dirs(), new_dirs.iter().cloned().collect());
+    }
+
+    #[test]
+    fn test_complex_pathlist_operations() {
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), "/usr/bin:/usr/local/bin".to_string());
+        
+        let data = undo::Data::default();
+        let mut shadowenv = Shadowenv::new(env, data, 0);
+
+        // Test multiple operations on the same pathlist
+        shadowenv.prepend_to_pathlist("PATH", "/opt/bin");
+        shadowenv.append_to_pathlist("PATH", "/custom/bin");
+        shadowenv.remove_from_pathlist("PATH", "/usr/bin");
+        shadowenv.prepend_to_pathlist("PATH", "/priority/bin");
+
+        assert_eq!(
+            shadowenv.get("PATH"),
+            Some("/priority/bin:/opt/bin:/usr/local/bin:/custom/bin".to_string())
+        );
+    }
+
+    #[test]
+    fn test_shadowenv_data_serialization() {
+        let mut env = HashMap::new();
+        env.insert("ORIGINAL".to_string(), "value".to_string());
+        
+        let data = undo::Data::default();
+        let mut shadowenv = Shadowenv::new(env, data, 0x123456789ABCDEF0);
+
+        // Modify environment
+        shadowenv.set("TEST_VAR", Some("new_value"));
+        shadowenv.append_to_pathlist("PATH", "/test/bin");
+        shadowenv.add_feature("test", Some("1.0"));
+
+        // Get serialized data
+        let result = shadowenv.format_shadowenv_data().unwrap();
+        
+        // Verify format and content
+        assert!(result.starts_with("123456789abcdef0:"));
+        assert!(result.contains("\"TEST_VAR\""));
+        assert!(result.contains("\"new_value\""));
+        assert!(result.contains("\"/test/bin\""));
+    }
+
+    #[test]
+    fn test_no_clobber_behavior() {
+        let mut env = HashMap::new();
+        env.insert("PROTECTED".to_string(), "original".to_string());
+        
+        let mut data = undo::Data::default();
+        data.scalars.push(undo::Scalar {
+            name: "PROTECTED".to_string(),
+            original: Some("original".to_string()),
+            current: Some("original".to_string()),
+            no_clobber: true,
+        });
+
+        let mut shadowenv = Shadowenv::new(env, data, 0);
+
+        // Attempt to modify protected variable
+        shadowenv.set("PROTECTED", Some("new_value"));
+
+        // Verify the value remains unchanged
+        assert_eq!(shadowenv.get("PROTECTED"), Some("original".to_string()));
+        assert!(shadowenv.should_not_clobber("PROTECTED"));
+    }
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect::<HashMap<_, _>>();
+        Shadowenv::new(env, data, 123456789)
+    }
+
+    #[test]
     fn test_get_set() {
         let mut shadowenv = build_shadow_env(vec![], Default::default());
         shadowenv.set("toto", Some("tata"));
