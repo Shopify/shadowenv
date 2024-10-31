@@ -36,6 +36,25 @@ mod tests {
     }
 
     #[test]
+    fn test_load_or_generate_signer_invalid_key_length() {
+        let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME").unwrap());
+        fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
+        let mut file = File::create(&path).unwrap();
+        file.write_all(&[0u8; 31]).unwrap(); // Write an invalid key length
+
+        let result = load_or_generate_signer();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_dir_trusted_non_existent() {
+        let signer = load_or_generate_signer().unwrap();
+        let path = PathBuf::from("/non/existent/directory");
+        let result = is_dir_trusted(&signer, &path);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_is_dir_trusted() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
@@ -80,6 +99,22 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
 
         let result = ensure_dir_tree_trusted(&[path]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_trust_dir_non_writable() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+        let signer = load_or_generate_signer().unwrap();
+
+        // Make the directory non-writable
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&path, perms).unwrap();
+
+        let result = trust_dir(&signer, &path);
         assert!(result.is_err());
     }
 
