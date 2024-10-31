@@ -18,11 +18,11 @@ fn test_colored_output() {
 
     let expected: Vec<_> = [
         "\x1b[91m- VAR_A=/existent\x1b[0m\x1b[K",
-        "\x1b[92m+ VAR_A=\x1b[48;5;22m/added\x1b[0;92m:/existent\x1b[0m\x1b[K"
+        "\x1b[92m+ VAR_A=\x1b[48;5;22m/added\x1b[0;92m:/existent\x1b[0m\x1b[K",
     ]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+    .iter()
+    .map(ToString::to_string)
+    .collect();
     assert_eq!(result, 0);
     assert_eq!(logger.0, expected);
 }
