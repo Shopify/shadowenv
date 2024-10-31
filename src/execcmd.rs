@@ -13,3 +13,6 @@ pub fn run(pathbuf: PathBuf, shadowenv_data: String, argv: Vec<&str>) -> Result<
     let err = exec::Command::new(argv[0]).args(&argv[1..]).exec();
     Err(err.into())
 }
+
+#[cfg(test)]
+mod tests;
