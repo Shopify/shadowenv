@@ -16,7 +16,21 @@ pub fn run(shellname: &str) -> i32 {
             1
         }
     }
-}
+    #[test]
+    fn test_run_current_exe_failure() {
+        // Temporarily override the current_exe function to simulate a failure
+        let original_current_exe = std::env::current_exe;
+        std::env::set_var("PATH", ""); // Clear PATH to simulate failure
+        assert!(std::env::current_exe().is_err());
+        std::env::set_var("PATH", original_current_exe().unwrap().to_str().unwrap()); // Restore PATH
+    }
+
+    #[test]
+    fn test_print_script_invalid_utf8() {
+        let invalid_utf8: &[u8] = &[0, 159, 146, 150]; // Invalid UTF-8 sequence
+        let result = String::from_utf8_lossy(invalid_utf8);
+        assert!(result.contains("�")); // Check for replacement character
+    }
 
 fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
     let hookbook = String::from_utf8_lossy(include_bytes!("../sh/hookbook.sh"));
@@ -30,7 +44,8 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{PathBuf, Path};
+    use std::ffi::OsStr;
 
     #[test]
     fn test_run_valid_shells() {
