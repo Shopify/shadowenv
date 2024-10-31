@@ -286,7 +286,7 @@ mod tests {
         initial_env.insert("EXISTING_VAR".to_string(), "initial".to_string());
         initial_env.insert("TO_BE_UNSET".to_string(), "remove_me".to_string());
 
-        let mut data = undo::Data::default();
+        let data = undo::Data::default();
         let mut shadowenv = Shadowenv::new(initial_env, data, 0);
         
         // Apply mutations directly

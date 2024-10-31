@@ -19,7 +19,6 @@ mod tests {
     use super::*;
     use std::env;
     use tempfile::TempDir;
-    use std::fs;
 
     fn setup_test_dir() -> (TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
@@ -51,7 +50,7 @@ mod tests {
         let (dir, path) = setup_test_dir();
         
         // Create valid shadowenv data that sets an environment variable
-        let shadowenv_data = r#"{"version":1,"mutations":[{"op":"set","name":"TEST_VAR","value":"test_value"}]}"#;
+        let shadowenv_data = "0000000000000000:{\"scalars\":[{\"name\":\"TEST_VAR\",\"original\":null,\"current\":\"test_value\",\"no_clobber\":false}],\"lists\":[],\"prev_dirs\":[]}";
         
         // We expect this to fail with exec error, but the environment should be modified
         let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
@@ -102,14 +101,7 @@ mod tests {
     fn test_run_with_pathlist_operations() {
         let (dir, path) = setup_test_dir();
         
-        let shadowenv_data = r#"{
-            "version": 1,
-            "mutations": [
-                {"op":"set","name":"TEST_PATH","value":"/initial/path"},
-                {"op":"append","name":"TEST_PATH","value":"/appended/path"},
-                {"op":"prepend","name":"TEST_PATH","value":"/prepended/path"}
-            ]
-        }"#;
+        let shadowenv_data = "0000000000000000:{\"scalars\":[],\"lists\":[{\"name\":\"TEST_PATH\",\"additions\":[\"/prepended/path\",\"/appended/path\"],\"deletions\":[]}],\"prev_dirs\":[]}";
         
         let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
         
@@ -126,12 +118,7 @@ mod tests {
         
         env::set_var("PROTECTED_VAR", "original_value");
         
-        let shadowenv_data = r#"{
-            "version": 1,
-            "mutations": [
-                {"op":"set","name":"PROTECTED_VAR","value":"new_value","no_clobber":true}
-            ]
-        }"#;
+        let shadowenv_data = "0000000000000000:{\"scalars\":[{\"name\":\"PROTECTED_VAR\",\"original\":null,\"current\":\"new_value\",\"no_clobber\":true}],\"lists\":[],\"prev_dirs\":[]}";
         
         let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
         
@@ -146,21 +133,11 @@ mod tests {
     fn test_run_with_multiple_shadowenv_data() {
         let (dir, path) = setup_test_dir();
         
-        let shadowenv_data1 = r#"{
-            "version": 1,
-            "mutations": [
-                {"op":"set","name":"TEST_VAR","value":"initial_value"}
-            ]
-        }"#;
+        let shadowenv_data1 = "0000000000000000:{\"scalars\":[{\"name\":\"TEST_VAR\",\"original\":null,\"current\":\"initial_value\",\"no_clobber\":false}],\"lists\":[],\"prev_dirs\":[]}";
         
         let _ = run(path.clone(), shadowenv_data1.to_string(), vec!["nonexistent_command"]);
         
-        let shadowenv_data2 = r#"{
-            "version": 1,
-            "mutations": [
-                {"op":"set","name":"TEST_VAR","value":"updated_value"}
-            ]
-        }"#;
+        let shadowenv_data2 = "0000000000000000:{\"scalars\":[{\"name\":\"TEST_VAR\",\"original\":null,\"current\":\"updated_value\",\"no_clobber\":false}],\"lists\":[],\"prev_dirs\":[]}";
         
         let result = run(path, shadowenv_data2.to_string(), vec!["nonexistent_command"]);
         
@@ -175,16 +152,7 @@ mod tests {
     fn test_run_with_features() {
         let (dir, path) = setup_test_dir();
         
-        let shadowenv_data = r#"{
-            "version": 1,
-            "mutations": [
-                {"op":"set","name":"TEST_VAR","value":"test_value"}
-            ],
-            "features": [
-                {"name": "test_feature", "version": "1.0"},
-                {"name": "another_feature"}
-            ]
-        }"#;
+        let shadowenv_data = "0000000000000000:{\"scalars\":[{\"name\":\"TEST_VAR\",\"original\":null,\"current\":\"test_value\",\"no_clobber\":false}],\"lists\":[],\"prev_dirs\":[],\"features\":[{\"name\":\"test_feature\",\"version\":\"1.0\"},{\"name\":\"another_feature\",\"version\":null}]}";
         
         let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
         
