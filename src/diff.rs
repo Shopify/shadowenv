@@ -16,7 +16,7 @@ fn test_colored_output() {
     let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
     let result = run_with_logger(&mut logger, env_vars, false, true, data.to_string());
 
-    let expected: Vec<_> = ["\x1b[92m+ VAR_A=/added:/existent\x1b[0m\x1b[K"]
+    let expected: Vec<_> = ["\x1b[92m+ VAR_A=/added:/existent\x1b[0m"]
         .iter()
         .map(ToString::to_string)
         .collect();
