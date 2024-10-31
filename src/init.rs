@@ -17,6 +17,7 @@ pub fn run(shellname: &str) -> i32 {
             1
         }
     }
+    0
 
 fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
     let hookbook = String::from_utf8_lossy(include_bytes!("../sh/hookbook.sh"));
