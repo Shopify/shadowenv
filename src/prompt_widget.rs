@@ -23,4 +23,16 @@ mod tests {
     fn test_run_with_nonzero_hash() {
         assert_eq!(run("12345678:{}".to_string()), 0);
     }
+
+    #[test]
+    fn test_run_with_malformed_data() {
+        assert_eq!(run("invalid:data".to_string()), 0);
+        assert_eq!(run(":".to_string()), 0);
+        assert_eq!(run("12345678:".to_string()), 0);
+    }
+
+    #[test]
+    fn test_run_with_unicode_hash() {
+        assert_eq!(run("🦀rust:{}".to_string()), 0);
+    }
 }

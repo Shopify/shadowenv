@@ -1,12 +1,19 @@
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct Feature {
     name: String,
     version: Option<String>,
 }
 
 impl Feature {
+    pub fn new<S: Into<String>>(name: S, version: Option<S>) -> Self {
+        Feature { 
+            name: name.into(),
+            version: version.map(Into::into)
+        }
+    }
+
     #[allow(dead_code)]
     pub fn name(&self) -> &str {
         &self.name
@@ -15,12 +22,6 @@ impl Feature {
     #[allow(dead_code)]
     pub fn version(&self) -> Option<&str> {
         self.version.as_deref()
-    }
-}
-
-impl Feature {
-    pub fn new(name: String, version: Option<String>) -> Self {
-        Feature { name, version }
     }
 }
 

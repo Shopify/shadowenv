@@ -223,12 +223,8 @@ impl Shadowenv {
 
 fn env_set(env: &mut HashMap<String, String>, a: String, b: Option<String>) {
     match b {
-        Some(string) => {
-            env.insert(a, string);
-        }
-        None => {
-            env.remove(&a);
-        }
+        Some(string) => { env.insert(a, string); }
+        None => { env.remove(&a); }
     }
 }
 

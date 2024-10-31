@@ -98,7 +98,9 @@ pub fn load_env(
             match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
-                Err(_) => Err(lang::ShadowlispError {}.into()),
+                Err(_) => Err(lang::ShadowlispError::Runtime(
+                    "Error evaluating shadowlisp code".to_string()
+                ).into()),
                 // note the "true" since we ran code to activate/modify the shadowenv
                 Ok(shadowenv) => Ok(Some(shadowenv)),
             }

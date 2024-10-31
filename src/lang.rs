@@ -1,6 +1,6 @@
 use crate::hash::{Source, SourceList};
 use crate::shadowenv::Shadowenv;
-use ketos::{Context, Error, FromValueRef, Name, Value};
+use ketos::{Context, Error, ExecError, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
     cell::{Ref, RefCell},
@@ -13,8 +13,10 @@ use thiserror::Error;
 pub struct ShadowLang {}
 
 #[derive(Debug, Error)]
-#[error("error while evaluating shadowlisp")]
-pub struct ShadowlispError;
+pub enum ShadowlispError {
+    #[error("{0}")]
+    Runtime(String)
+}
 
 macro_rules! ketos_fn2 {
     ( $scope:expr => $name:expr => fn $ident:ident
@@ -69,10 +71,12 @@ fn get_value(ctx: &Context, shadowenv_name: Name) -> Value {
 }
 
 fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
-    let res = vals.iter().fold(
+    let res = vals.iter().try_fold(
         PathBuf::new(),
-        |acc, v| acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()), // TODO(burke): don't unwrap
-    );
+        |acc, v| match <&str as FromValueRef>::from_value_ref(v) {
+            Ok(s) => Ok(acc.join(s)),
+            Err(_) => Err(Error::ExecError(ExecError::expected("string", v)))
+        })?;
 
     Ok(res.to_string_lossy().to_string())
 }
@@ -119,7 +123,8 @@ impl ShadowLang {
 
                 let value = get_value(ctx, shadowenv_name);
                 let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])
+                    .map_err(|_| Error::ExecError(ExecError::expected("string", &args[0])))?;
 
                 let result = wrapper
                     .borrow_env()
@@ -152,8 +157,10 @@ impl ShadowLang {
 
                     let value = get_value(ctx, shadowenv_name);
                     let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[0])))?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[1])))?;
 
                     wrapper.borrow_mut_env().append_to_pathlist(name, value);
                     Ok(Value::Unit)
@@ -184,8 +191,10 @@ impl ShadowLang {
 
                     let value = get_value(ctx, shadowenv_name);
                     let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[0])))?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[1])))?;
 
                     wrapper.borrow_mut_env().remove_from_pathlist(name, value);
                     Ok(Value::Unit)
@@ -200,8 +209,10 @@ impl ShadowLang {
 
                     let value = get_value(ctx, shadowenv_name);
                     let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                    let name = <&str as FromValueRef>::from_value_ref(&args[0])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[0])))?;
+                    let value = <&str as FromValueRef>::from_value_ref(&args[1])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[1])))?;
 
                     wrapper
                         .borrow_mut_env()
@@ -217,7 +228,8 @@ impl ShadowLang {
 
                 let version = match args.len() {
                     1 => None,
-                    2 => Some(<&str as FromValueRef>::from_value_ref(&args[1])?),
+                    2 => Some(<&str as FromValueRef>::from_value_ref(&args[1])
+                        .map_err(|_| Error::ExecError(ExecError::expected("string", &args[1])))?),
                     _ => {
                         return Err(From::from(ketos::exec::ExecError::ArityError {
                             name: Some(name),
@@ -226,7 +238,8 @@ impl ShadowLang {
                         }));
                     }
                 };
-                let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let feature = <&str as FromValueRef>::from_value_ref(&args[0])
+                    .map_err(|_| Error::ExecError(ExecError::expected("string", &args[0])))?;
 
                 wrapper.borrow_mut_env().add_feature(feature, version);
                 Ok(Value::Unit)
@@ -281,10 +294,14 @@ impl ShadowLang {
 
             // TODO: error type?
             if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
-                interp.display_error(&err);
+                let mut error_msg = interp.format_error(&err);
                 if let Some(trace) = interp.get_traceback() {
-                    eprintln!();
-                    interp.display_trace(&trace);
+                    error_msg.push('\n');
+                    error_msg.push_str(&interp.format_trace(&trace));
+                }
+                #[cfg(not(test))]
+                {
+                    eprintln!("{}", error_msg);
                 }
                 return Err(err);
             };
@@ -458,5 +475,117 @@ mod tests {
         )
         .unwrap();
         assert_eq!(shadowenv.get("TEST"), Some("TWO".to_string()));
+    }
+
+    #[test]
+    fn test_path_concat_with_nil() {
+        let shadowenv = build_shadow_env(vec![]);
+        let source = build_source(
+            r#"
+                (env/set "TEST" (path-concat () "asdf"))
+            "#,
+        );
+
+        let result = ShadowLang::run_programs(
+            shadowenv,
+            SourceList::new_with_sources(vec![source]),
+        );
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("expected string"));
+    }
+
+    #[test]
+    fn test_env_set_with_nil_name() {
+        let shadowenv = build_shadow_env(vec![]);
+        let source = build_source(
+            r#"
+                (env/set () "value")
+            "#,
+        );
+
+        let result = ShadowLang::run_programs(
+            shadowenv,
+            SourceList::new_with_sources(vec![source]),
+        );
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("expected string"));
+    }
+
+    #[test]
+    fn test_env_get_with_nil_name() {
+        let shadowenv = build_shadow_env(vec![]);
+        let source = build_source(
+            r#"
+                (env/get ())
+            "#,
+        );
+
+        let result = ShadowLang::run_programs(
+            shadowenv,
+            SourceList::new_with_sources(vec![source]),
+        );
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("expected string"));
+    }
+
+    #[test]
+    fn test_pathlist_operations_with_nil() {
+        let shadowenv = build_shadow_env(vec![]);
+        let source = build_source(
+            r#"
+                (env/append-to-pathlist () "value")
+                (env/append-to-pathlist "PATH" ())
+                (env/prepend-to-pathlist () "value")
+                (env/prepend-to-pathlist "PATH" ())
+                (env/remove-from-pathlist () "value")
+                (env/remove-from-pathlist "PATH" ())
+                (env/remove-from-pathlist-containing () "value")
+                (env/remove-from-pathlist-containing "PATH" ())
+            "#,
+        );
+
+        let result = ShadowLang::run_programs(
+            shadowenv,
+            SourceList::new_with_sources(vec![source]),
+        );
+        assert!(result.is_err());
+        assert!(format!("{}", result.unwrap_err()).contains("expected string"));
+    }
+
+    #[test]
+    fn test_provide_with_nil_feature() {
+        // Test nil feature argument
+        {
+            let shadowenv = build_shadow_env(vec![]);
+            let source = build_source(
+                r#"
+                    (provide ())
+                "#,
+            );
+
+            let result = ShadowLang::run_programs(
+                shadowenv,
+                SourceList::new_with_sources(vec![source]),
+            );
+            assert!(result.is_err());
+            assert!(format!("{}", result.unwrap_err()).contains("expected string"));
+        }
+
+        // Test nil version argument
+        {
+            let shadowenv = build_shadow_env(vec![]);
+            let source = build_source(
+                r#"
+                    (provide "feature" ())
+                "#,
+            );
+
+            let result = ShadowLang::run_programs(
+                shadowenv,
+                SourceList::new_with_sources(vec![source]),
+            );
+            assert!(result.is_err());
+            assert!(format!("{}", result.unwrap_err()).contains("expected string"));
+        }
     }
 }
