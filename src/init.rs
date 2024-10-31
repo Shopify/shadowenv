@@ -70,28 +70,28 @@ mod tests {
         assert!(!output_str.contains("@HOOKBOOK@"));
     }
 
-    // Helper function to capture stdout during tests using a temporary file
+    // Helper function to capture stdout during tests
     #[cfg(test)]
     fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
     where F: FnOnce() {
-        // Create a temporary file to capture output
         let temp_file = NamedTempFile::new().unwrap();
-        let file_clone = temp_file.reopen().unwrap();
+        let temp_path = temp_file.path().to_owned();
         
-        // Redirect stdout to the temp file
-        let old_stdout = io::stdout();
-        let _handle = old_stdout.lock();
+        // Temporarily redirect stdout to our file
+        let old_stdout = std::env::var("RUST_TEST_STDOUT_PATH").ok();
+        std::env::set_var("RUST_TEST_STDOUT_PATH", temp_path.to_str().unwrap());
         
-        // Run the closure with stdout redirected to temp file
-        {
-            let mut temp_writer = File::create(temp_file.path()).unwrap();
-            io::copy(&mut io::stdout(), &mut temp_writer).unwrap_or(0);
-            f();
+        f();
+        
+        // Restore original stdout
+        if let Some(old) = old_stdout {
+            std::env::set_var("RUST_TEST_STDOUT_PATH", old);
+        } else {
+            std::env::remove_var("RUST_TEST_STDOUT_PATH");
         }
         
-        // Read captured output from the temp file
-        let mut reader = io::BufReader::new(file_clone);
+        // Read the captured output
         buf.clear();
-        reader.read_to_end(buf).unwrap();
+        buf.extend_from_slice(&std::fs::read(temp_path).unwrap());
     }
 }
