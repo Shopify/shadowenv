@@ -5,9 +5,9 @@ use std::path::PathBuf;
 pub fn run(shellname: &str) -> i32 {
     let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
     match shellname {
-        "bash" => print_script(pb, include_bytes!("../sh/shadowenv.bash.in")),
-        "zsh" => print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),
-        "fish" => print_script(pb, include_bytes!("../sh/shadowenv.fish.in")),
+        "bash" => return print_script(pb, include_bytes!("../sh/shadowenv.bash.in")),
+        "zsh" => return print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),
+        "fish" => return print_script(pb, include_bytes!("../sh/shadowenv.fish.in")),
         _ => {
             eprintln!(
                 "invalid shell name '{}' (must be one of bash, zsh, fish)",
