@@ -134,4 +134,89 @@ mod tests {
         assert!(result.is_err());
         drop(dir);
     }
+
+    #[test]
+    fn test_run_with_path_modifications() {
+        let (dir, path) = setup_test_dir();
+        
+        // Save original PATH
+        let original_path = env::var("PATH").unwrap_or_default();
+        
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"PATH","value":"/test/bin:/usr/bin"}
+            ]
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        // Verify PATH was modified
+        assert_eq!(env::var("PATH").unwrap(), "/test/bin:/usr/bin");
+        
+        // Restore original PATH
+        env::set_var("PATH", original_path);
+        
+        assert!(result.is_err());
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_empty_shadowenv_data() {
+        let (dir, path) = setup_test_dir();
+        
+        // Test with minimal valid shadowenv data that makes no mutations
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": []
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No such file"));
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_invalid_version() {
+        let (dir, path) = setup_test_dir();
+        
+        let shadowenv_data = r#"{
+            "version": 999,
+            "mutations": []
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["echo", "test"]);
+        
+        assert!(result.is_err());
+        // The exact error message might vary depending on your version handling,
+        // adjust the contains string accordingly
+        assert!(result.unwrap_err().to_string().contains("version"));
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_special_chars_in_env() {
+        let (dir, path) = setup_test_dir();
+        
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_SPECIAL","value":"value with spaces and $pecial ch@rs"},
+                {"op":"set","name":"TEST_QUOTES","value":"value \"with\" 'quotes'"}
+            ]
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        assert_eq!(env::var("TEST_SPECIAL").unwrap(), "value with spaces and $pecial ch@rs");
+        assert_eq!(env::var("TEST_QUOTES").unwrap(), "value \"with\" 'quotes'");
+        
+        env::remove_var("TEST_SPECIAL");
+        env::remove_var("TEST_QUOTES");
+        
+        assert!(result.is_err());
+        drop(dir);
+    }
 }
