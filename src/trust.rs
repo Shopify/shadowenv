@@ -30,7 +30,7 @@ mod tests {
 
     #[test]
     fn test_load_or_generate_signer() {
-        let signer = load_or_generate_signer().unwrap();
+        let signer = load_or_generate_signer()?;
         assert_eq!(signer.to_bytes().len(), 32);
     }
 
@@ -186,7 +186,7 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 
 /// Trust the closest parent shadowenv root to the current working dir and create a new signature file.
 pub fn run(dir: PathBuf) -> Result<(), Error> {
-    let signer = load_or_generate_signer().unwrap();
+    let signer = load_or_generate_signer()?;
 
     let roots = loader::find_shadowenv_paths(&dir)?;
     if roots.is_empty() {
@@ -195,7 +195,11 @@ pub fn run(dir: PathBuf) -> Result<(), Error> {
 
     // `roots`: Closer roots to current dir have lower indices, so we take the first element here.
     // Unwrap is safe: We're checking `is_empty` above.
-    trust_dir(&signer, roots.first().unwrap())?;
+    if let Some(first_root) = roots.first() {
+        trust_dir(&signer, first_root)?;
+    } else {
+        return Err(NoShadowenv {}.into());
+    }
     Ok(())
 }
 
