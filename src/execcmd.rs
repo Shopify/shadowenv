@@ -43,7 +43,7 @@ mod tests {
     #[test]
     fn test_run_with_invalid_shadowenv_data() {
         let (dir, path) = setup_test_dir();
-        let result = run(path, "invalid:json".to_string(), vec!["echo", "test"]);
+        let result = run(path, "0000000000000000:{invalid_json}".to_string(), vec!["echo", "test"]);
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("invalid json") || err.contains("expected value"));
