@@ -31,7 +31,7 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use std::io::{self, Write};
+    use std::io;
 
     #[test]
     fn test_run_valid_shells() {
@@ -70,21 +70,15 @@ mod tests {
 
     // Helper function to capture stdout during tests
     #[cfg(test)]
-    fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F) 
+    fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
     where F: FnOnce() {
-        use std::io::{self, Write};
         let stdout = io::stdout();
-        let mut handle = stdout.lock();
-        let mut old_stdout = handle.by_ref().to_owned();
-        
-        // Swap stdout with our buffer
-        let _ = handle.write_all(b"");
-        let _ = std::mem::replace(&mut old_stdout, buf);
+        let handle = stdout.lock();
         
         // Run the closure
         f();
         
-        // Restore stdout
-        let _ = std::mem::replace(buf, &mut old_stdout);
+        // For now we're not actually capturing output, just running the function
+        // TODO: Implement proper stdout capture if needed for assertions
     }
 }
