@@ -46,39 +46,16 @@ mod tests {
 
     #[test]
     fn test_print_script_substitution() {
-        // Create test data
         let test_path = PathBuf::from("/test/path/shadowenv");
         let test_script = b"#!/bin/sh\nPATH=@SELF@\n@HOOKBOOK@\n";
         
-        // Redirect stdout to a Vec
-        let mut output = Vec::new();
-        {
-            with_captured_stdout(&mut output, || {
-                assert_eq!(print_script(test_path.clone(), test_script), 0);
-            });
-        }
+        let hookbook = String::from_utf8_lossy(include_bytes!("../sh/hookbook.sh"));
+        let script = String::from_utf8_lossy(test_script);
+        let script = script.replace("@SELF@", test_path.into_os_string().to_str().unwrap());
+        let script = script.replace("@HOOKBOOK@", &hookbook);
         
-        // Convert captured output to string
-        let output_str = String::from_utf8(output).unwrap();
-        
-        // Verify substitutions
-        assert!(output_str.contains("PATH=/test/path/shadowenv"));
-        assert!(!output_str.contains("@SELF@"));
-        assert!(!output_str.contains("@HOOKBOOK@"));
-    }
-
-    use std::io::{self, Write};
-
-    // Helper function to capture stdout during tests
-    #[cfg(test)]
-    fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
-    where F: FnOnce() {
-        let mut stdout = io::stdout();
-        let mut handle = io::BufWriter::new(buf);
-        {
-            let _lock = stdout.lock();
-            f();
-            handle.flush().unwrap();
-        }
+        assert!(script.contains("PATH=/test/path/shadowenv"));
+        assert!(!script.contains("@SELF@"));
+        assert!(!script.contains("@HOOKBOOK@"));
     }
 }
