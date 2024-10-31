@@ -68,28 +68,20 @@ mod tests {
         assert!(!output_str.contains("@HOOKBOOK@"));
     }
 
+    use std::io::Write;
+
     // Helper function to capture stdout during tests
     #[cfg(test)]
     fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
     where F: FnOnce() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path().to_owned();
-        
-        // Temporarily redirect stdout to our file
-        let old_stdout = std::env::var("RUST_TEST_STDOUT_PATH").ok();
-        std::env::set_var("RUST_TEST_STDOUT_PATH", temp_path.to_str().unwrap());
-        
+        use std::mem;
+        let old = std::io::stdout();
+        let mut handle = std::io::BufWriter::new(buf);
+        // Temporarily redirect stdout
+        let _ = std::io::set_print(Some(Box::new(&mut handle)));
         f();
-        
-        // Restore original stdout
-        if let Some(old) = old_stdout {
-            std::env::set_var("RUST_TEST_STDOUT_PATH", old);
-        } else {
-            std::env::remove_var("RUST_TEST_STDOUT_PATH");
-        }
-        
-        // Read the captured output
-        buf.clear();
-        buf.extend_from_slice(&std::fs::read(temp_path).unwrap());
+        handle.flush().unwrap();
+        // Restore stdout
+        let _ = std::io::set_print(Some(Box::new(old)));
     }
 }
