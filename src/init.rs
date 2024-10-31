@@ -1,5 +1,4 @@
-use std::path::{PathBuf, Path};
-use std::ffi::OsStr;
+use std::path::PathBuf;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
@@ -14,7 +13,7 @@ pub fn run(shellname: &str) -> i32 {
                 "invalid shell name '{}' (must be one of bash, zsh, fish)",
                 shellname
             );
-            1
+            return 1
         }
     }
     0
@@ -32,8 +31,7 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::{PathBuf, Path};
-    use std::ffi::OsStr;
+    use std::path::PathBuf;
 
     #[test]
     fn test_run_valid_shells() {
