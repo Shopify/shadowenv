@@ -63,7 +63,7 @@ mod tests {
         let output_str = String::from_utf8(output).unwrap();
         
         // Verify substitutions
-        assert!(output_str.contains("/test/path/shadowenv"));
+        assert!(output_str.contains("PATH=/test/path/shadowenv"));
         assert!(!output_str.contains("@SELF@"));
         assert!(!output_str.contains("@HOOKBOOK@"));
     }
