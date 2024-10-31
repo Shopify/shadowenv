@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_shadowenv_feature_management() {
-        let mut env = HashMap::new();
+        let env = HashMap::new();
         let data = undo::Data::default();
         let mut shadowenv = Shadowenv::new(env, data, 0);
 
