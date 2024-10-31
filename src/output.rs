@@ -188,3 +188,64 @@ fn should_print_activation() -> bool {
 
     std::io::stderr().is_terminal() && configured_to_print
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_backticks_to_bright_green() {
+        let err = anyhow!("Error in `command` and another `thing`");
+        let result = backticks_to_bright_green(err);
+        assert!(result.contains("\x1b[1;32mcommand\x1b[1;31m"));
+        assert!(result.contains("\x1b[1;32mthing\x1b[1;31m"));
+    }
+
+    #[test]
+    fn test_dir_diff_empty() {
+        let added = HashSet::new();
+        let removed = HashSet::new();
+        assert_eq!(dir_diff(added, removed), None);
+    }
+
+    #[test]
+    fn test_dir_diff_additions() {
+        let mut added = HashSet::new();
+        added.insert(PathBuf::from("/test/path1"));
+        added.insert(PathBuf::from("/test/path2"));
+        let removed = HashSet::new();
+        
+        let result = dir_diff(added, removed).unwrap();
+        assert!(result.contains("\x1b[0;32m++"));
+        assert!(!result.contains("|"));
+        assert!(!result.contains("-"));
+    }
+
+    #[test]
+    fn test_dir_diff_removals() {
+        let added = HashSet::new();
+        let mut removed = HashSet::new();
+        removed.insert(PathBuf::from("/test/path1"));
+        removed.insert(PathBuf::from("/test/path2"));
+        
+        let result = dir_diff(added, removed).unwrap();
+        assert!(!result.contains("+"));
+        assert!(!result.contains("|"));
+        assert!(result.contains("\x1b[0;31m--"));
+    }
+
+    #[test]
+    fn test_dir_diff_both() {
+        let mut added = HashSet::new();
+        added.insert(PathBuf::from("/test/path1"));
+        let mut removed = HashSet::new();
+        removed.insert(PathBuf::from("/test/path2"));
+        
+        let result = dir_diff(added, removed).unwrap();
+        assert!(result.contains("\x1b[0;32m+"));
+        assert!(result.contains("\x1b[38;5;240m|"));
+        assert!(result.contains("\x1b[0;31m-"));
+    }
+}
