@@ -535,4 +535,3 @@ mod tests {
 
         assert_eq!(shadowenv.exports().unwrap(), expected_export);
     }
-}
