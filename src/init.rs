@@ -31,7 +31,6 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use std::io;
     use tempfile::NamedTempFile;
 
     #[test]
