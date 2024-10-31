@@ -39,9 +39,9 @@ mod tests {
     #[test]
     fn test_run_with_invalid_shadowenv_data() {
         let (dir, path) = setup_test_dir();
-        let result = run(path, "invalid{json".to_string(), vec!["echo", "test"]);
+        let result = run(path, "invalid:json".to_string(), vec!["echo", "test"]);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid"));
+        assert!(result.unwrap_err().to_string().contains("invalid json"));
         drop(dir);
     }
 
@@ -71,7 +71,8 @@ mod tests {
         let (dir, path) = setup_test_dir();
         let result = run(path, String::new(), vec![]);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("index out of bounds"));
+        // Check for more specific error message about empty command
+        assert!(result.unwrap_err().to_string().contains("empty command"));
         drop(dir);
     }
 
@@ -82,7 +83,7 @@ mod tests {
         // Set an existing environment variable
         env::set_var("EXISTING_VAR", "original_value");
         
-        let shadowenv_data = r#"{"version":1,"mutations":[{"op":"set","name":"TEST_VAR","value":"test_value"}]}"#;
+        let shadowenv_data = "0000000000000000:{\"scalars\":[{\"name\":\"TEST_VAR\",\"original\":null,\"current\":\"test_value\",\"no_clobber\":false}],\"lists\":[],\"prev_dirs\":[]}";
         
         let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
         
