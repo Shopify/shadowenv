@@ -7,6 +7,16 @@ pub struct Feature {
 }
 
 impl Feature {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
+    }
+}
+
+impl Feature {
     pub fn new(name: String, version: Option<String>) -> Self {
         Feature { name, version }
     }

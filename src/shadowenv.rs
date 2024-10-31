@@ -348,9 +348,9 @@ mod tests {
         shadowenv.add_feature("node", None);
 
         let features = shadowenv.features();
-        assert!(features.iter().any(|f| f.name == "rust" && f.version == Some("1.70.0".to_string())));
-        assert!(features.iter().any(|f| f.name == "python" && f.version == Some("3.9".to_string())));
-        assert!(features.iter().any(|f| f.name == "node" && f.version == None));
+        assert!(features.iter().any(|f| f.name() == "rust" && f.version() == Some("1.70.0")));
+        assert!(features.iter().any(|f| f.name() == "python" && f.version() == Some("3.9")));
+        assert!(features.iter().any(|f| f.name() == "node" && f.version() == None));
     }
 
     #[test]
