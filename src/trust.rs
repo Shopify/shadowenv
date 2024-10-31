@@ -36,6 +36,44 @@ mod tests {
     }
 
     #[test]
+    fn test_is_dir_trusted() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let signer = load_or_generate_signer().unwrap();
+        let result = is_dir_trusted(&signer, &path);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+
+        trust_dir(&signer, &path).unwrap();
+        let result = is_dir_trusted(&signer, &path);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_run_no_shadowenv() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let result = run(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err().downcast_ref::<NoShadowenv>(), Some(_)));
+    }
+
+    #[test]
+    fn test_write_gitignore() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        write_gitignore(&path).unwrap();
+        let gitignore_content = fs::read_to_string(path.join(".gitignore")).unwrap();
+        assert!(gitignore_content.contains("/.*\n!/.gitignore\n"));
+    }
+
+    #[test]
     fn test_ensure_dir_tree_trusted() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
