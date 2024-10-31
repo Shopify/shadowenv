@@ -20,6 +20,39 @@ pub struct NoShadowenv;
 #[derive(ThisError, Debug)]
 pub struct NotTrusted {
     pub untrusted_directories: Vec<String>,
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_load_or_generate_signer() {
+        let signer = load_or_generate_signer().unwrap();
+        assert_eq!(signer.to_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_ensure_dir_tree_trusted() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let result = ensure_dir_tree_trusted(&[path]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_trust_dir() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let signer = load_or_generate_signer().unwrap();
+        let result = trust_dir(&signer, &path);
+        assert!(result.is_ok());
+    }
 }
 
 impl Display for NotTrusted {
