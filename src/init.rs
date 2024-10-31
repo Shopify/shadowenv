@@ -51,16 +51,12 @@ mod tests {
         let test_path = PathBuf::from("/test/path/shadowenv");
         let test_script = b"#!/bin/sh\nPATH=@SELF@\n@HOOKBOOK@\n";
         
-        // Capture stdout
+        // Redirect stdout to a Vec
         let mut output = Vec::new();
         {
-            let mut old_stdout = io::stdout();
-            std::io::set_print!({
-                let mut w = &mut output;
-                move |s| w.write_all(s.as_bytes()).map(|_| ())
+            with_captured_stdout(&mut output, || {
+                assert_eq!(print_script(test_path.clone(), test_script), 0);
             });
-            
-            assert_eq!(print_script(test_path.clone(), test_script), 0);
         }
         
         // Convert captured output to string
@@ -70,5 +66,25 @@ mod tests {
         assert!(output_str.contains("/test/path/shadowenv"));
         assert!(!output_str.contains("@SELF@"));
         assert!(!output_str.contains("@HOOKBOOK@"));
+    }
+
+    // Helper function to capture stdout during tests
+    #[cfg(test)]
+    fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F) 
+    where F: FnOnce() {
+        use std::io::{self, Write};
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        let mut old_stdout = handle.by_ref().to_owned();
+        
+        // Swap stdout with our buffer
+        let _ = handle.write_all(b"");
+        let _ = std::mem::replace(&mut old_stdout, buf);
+        
+        // Run the closure
+        f();
+        
+        // Restore stdout
+        let _ = std::mem::replace(buf, &mut old_stdout);
     }
 }
