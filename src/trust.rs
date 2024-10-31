@@ -36,6 +36,17 @@ mod tests {
     }
 
     #[test]
+    fn test_load_or_generate_signer_corrupted_key_file() {
+        let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME").unwrap());
+        fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
+        let mut file = File::create(&path).unwrap();
+        file.write_all(b"corrupted_key_data").unwrap(); // Write corrupted key data
+
+        let result = load_or_generate_signer();
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_load_or_generate_signer_invalid_key_length() {
         let path = format!("{}/.config/shadowenv/trust-key-v2", env::var("HOME").unwrap());
         fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
@@ -82,6 +93,20 @@ mod tests {
     }
 
     #[test]
+    fn test_write_gitignore_existing_file() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let gitignore_path = path.join(".gitignore");
+        fs::write(&gitignore_path, "/.*\n").unwrap(); // Pre-existing .gitignore content
+
+        write_gitignore(&path).unwrap();
+        let gitignore_content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(gitignore_content.contains("/.*\n!/.gitignore\n"));
+    }
+
+    #[test]
     fn test_write_gitignore() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().to_path_buf();
@@ -116,6 +141,19 @@ mod tests {
 
         let result = trust_dir(&signer, &path);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_trust_dir_existing_signature() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let signer = load_or_generate_signer().unwrap();
+        trust_dir(&signer, &path).unwrap(); // Create initial signature
+
+        let result = trust_dir(&signer, &path); // Attempt to overwrite signature
+        assert!(result.is_ok());
     }
 
     #[test]
