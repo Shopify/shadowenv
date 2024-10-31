@@ -223,6 +223,7 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
+    use std::collections::HashMap;
     #[test]
     fn load_trusted_source_returns_an_error_for_untrusted_folders() {
         let temp_dir = tempdir().unwrap();
@@ -272,5 +273,40 @@ mod tests {
         // So the outermost env must come first, with the innermost dir coming last.
         assert!(sources[0].dir.ends_with("dir1"));
         assert!(sources[1].dir.ends_with("dir1/dir2"));
+    }
+
+    #[test]
+    fn test_mutate_own_env_basic_operations() {
+        // Setup initial environment
+        env::set_var("EXISTING_VAR", "initial");
+        env::set_var("TO_BE_UNSET", "remove_me");
+
+        // Create a shadowenv with various mutation types
+        let mut initial_env: HashMap<String, String> = HashMap::new();
+        initial_env.insert("EXISTING_VAR".to_string(), "initial".to_string());
+        initial_env.insert("TO_BE_UNSET".to_string(), "remove_me".to_string());
+
+        let mut data = undo::Data::default();
+        let shadowenv = Shadowenv::new(initial_env, data, 0);
+        
+        // Prepare mutations
+        let mut mutations = HashMap::new();
+        mutations.insert("NEW_VAR".to_string(), Some("new_value".to_string()));
+        mutations.insert("EXISTING_VAR".to_string(), Some("modified".to_string()));
+        mutations.insert("TO_BE_UNSET".to_string(), None);
+
+        // Apply mutations through test-only method
+        let shadowenv = shadowenv.with_test_exports(mutations);
+        mutate_own_env(&shadowenv).unwrap();
+
+        // Verify environment changes
+        assert_eq!(env::var("NEW_VAR").unwrap(), "new_value");
+        assert_eq!(env::var("EXISTING_VAR").unwrap(), "modified");
+        assert!(env::var("TO_BE_UNSET").is_err());
+
+        // Cleanup
+        env::remove_var("NEW_VAR");
+        env::remove_var("EXISTING_VAR");
+        env::remove_var("TO_BE_UNSET");
     }
 }
