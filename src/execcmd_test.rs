@@ -80,4 +80,58 @@ mod tests {
         assert!(result.is_err());
         drop(dir);
     }
+
+    #[test]
+    fn test_run_with_complex_shadowenv_mutations() {
+        let (dir, path) = setup_test_dir();
+        
+        // Test multiple mutations including set, unset, and append
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_SET","value":"set_value"},
+                {"op":"append","name":"TEST_APPEND","value":"append_value"},
+                {"op":"unset","name":"TEST_UNSET"}
+            ]
+        }"#;
+        
+        // Set a variable that should be unset
+        env::set_var("TEST_UNSET", "should_be_removed");
+        // Set a variable that should be appended to
+        env::set_var("TEST_APPEND", "original_");
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        // Verify all mutations were applied
+        assert_eq!(env::var("TEST_SET").unwrap(), "set_value");
+        assert_eq!(env::var("TEST_APPEND").unwrap(), "original_append_value");
+        assert!(env::var("TEST_UNSET").is_err());
+        
+        // Cleanup
+        env::remove_var("TEST_SET");
+        env::remove_var("TEST_APPEND");
+        
+        assert!(result.is_err());
+        drop(dir);
+    }
+
+    #[test]
+    fn test_run_with_unicode_env_vars() {
+        let (dir, path) = setup_test_dir();
+        
+        let shadowenv_data = r#"{
+            "version": 1,
+            "mutations": [
+                {"op":"set","name":"TEST_UNICODE","value":"🦀 rust"}
+            ]
+        }"#;
+        
+        let result = run(path, shadowenv_data.to_string(), vec!["nonexistent_command"]);
+        
+        assert_eq!(env::var("TEST_UNICODE").unwrap(), "🦀 rust");
+        
+        env::remove_var("TEST_UNICODE");
+        assert!(result.is_err());
+        drop(dir);
+    }
 }
