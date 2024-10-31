@@ -70,6 +70,15 @@ trait Logger {
         assert_eq!(result, 0);
         assert_eq!(logger.0, expected);
     }
+#[derive(Default)]
+struct DummyLogger(Vec<String>);
+
+impl Logger for DummyLogger {
+    fn print(&mut self, value: String) {
+        self.0.push(value);
+    }
+}
+
 struct StdoutLogger;
 
 impl Logger for StdoutLogger {
