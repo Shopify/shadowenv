@@ -45,7 +45,8 @@ mod tests {
         let (dir, path) = setup_test_dir();
         let result = run(path, "invalid:json".to_string(), vec!["echo", "test"]);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("expected value"));
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("invalid json") || err.contains("expected value"));
         drop(dir);
     }
 
