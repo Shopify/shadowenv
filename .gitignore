@@ -11,5 +11,3 @@
 !/sh/completions/.keep
 /result
 /tests/
-/target/debug/
-/target/release/
