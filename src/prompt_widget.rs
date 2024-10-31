@@ -4,3 +4,23 @@ pub fn run(shadowenv_data: String) -> i32 {
     }
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_run_with_empty_data() {
+        assert_eq!(run("".to_string()), 0);
+    }
+
+    #[test]
+    fn test_run_with_zero_hash() {
+        assert_eq!(run("00000000:{}".to_string()), 0);
+    }
+
+    #[test]
+    fn test_run_with_nonzero_hash() {
+        assert_eq!(run("12345678:{}".to_string()), 0);
+    }
+}

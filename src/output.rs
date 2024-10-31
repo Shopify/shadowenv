@@ -194,6 +194,53 @@ mod tests {
     use super::*;
     use anyhow::anyhow;
     use std::path::PathBuf;
+    use std::env;
+
+    #[test]
+    fn test_handle_hook_error() {
+        let err = anyhow!("test error");
+        let result = handle_hook_error(err, 1234, true);
+        assert_eq!(result, 1);
+
+        let err = anyhow!("test error");
+        let result = handle_hook_error(err, 1234, false);
+        assert_eq!(result, 1);
+    }
+
+    #[test]
+    fn test_should_print_activation() {
+        // Test with SHADOWENV_SILENT unset
+        env::remove_var("SHADOWENV_SILENT");
+        // Note: Result depends on whether stderr is a terminal
+        let default_result = should_print_activation();
+
+        // Test with SHADOWENV_SILENT=false
+        env::set_var("SHADOWENV_SILENT", "false");
+        assert_eq!(should_print_activation(), default_result);
+
+        // Test with SHADOWENV_SILENT=true
+        env::set_var("SHADOWENV_SILENT", "true");
+        assert_eq!(should_print_activation(), false);
+
+        // Cleanup
+        env::remove_var("SHADOWENV_SILENT");
+    }
+
+    #[test]
+    fn test_print_activation_to_tty() {
+        let mut current_dirs = HashSet::new();
+        let mut prev_dirs = HashSet::new();
+        let mut features = HashSet::new();
+
+        current_dirs.insert(PathBuf::from("/test/current"));
+        prev_dirs.insert(PathBuf::from("/test/prev"));
+        features.insert(Feature::new("test".to_string(), Some("1.0".to_string())));
+
+        // This will only print if stderr is a terminal
+        print_activation_to_tty(current_dirs, prev_dirs, features);
+        // We can't easily assert the output since it depends on stderr being a terminal
+        // But we can verify it doesn't panic
+    }
 
     #[test]
     fn test_backticks_to_bright_green() {
