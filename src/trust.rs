@@ -20,6 +20,8 @@ pub struct NoShadowenv;
 #[derive(ThisError, Debug)]
 pub struct NotTrusted {
     pub untrusted_directories: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
