@@ -10,3 +10,4 @@
 /sh/completions/
 !/sh/completions/.keep
 /result
+/tests/

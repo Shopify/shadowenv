@@ -22,6 +22,161 @@ pub struct NotTrusted {
     pub untrusted_directories: Vec<String>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_load_or_generate_signer() -> Result<(), Box<dyn std::error::Error>> {
+        let signer = load_or_generate_signer()?;
+        assert_eq!(signer.to_bytes().len(), 32);
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_or_generate_signer_corrupted_key_file() {
+        let path = format!(
+            "{}/.config/shadowenv/trust-key-v2",
+            env::var("HOME").unwrap()
+        );
+        fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
+        let mut file = File::create(&path).unwrap();
+        file.write_all(b"corrupted_key_data").unwrap(); // Write corrupted key data
+
+        let result = load_or_generate_signer();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_or_generate_signer_invalid_key_length() {
+        let path = format!(
+            "{}/.config/shadowenv/trust-key-v2",
+            env::var("HOME").unwrap()
+        );
+        fs::create_dir_all(Path::new(&path).parent().unwrap()).unwrap();
+        let mut file = File::create(&path).unwrap();
+        file.write_all(&[0u8; 31]).unwrap(); // Write an invalid key length
+
+        let result = load_or_generate_signer();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_dir_trusted_non_existent() {
+        let signer = load_or_generate_signer().unwrap();
+        let path = PathBuf::from("/non/existent/directory");
+        let result = is_dir_trusted(&signer, &path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_dir_trusted() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let signer = load_or_generate_signer().unwrap();
+        let result = is_dir_trusted(&signer, &path);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+
+        trust_dir(&signer, &path).unwrap();
+        let result = is_dir_trusted(&signer, &path);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_run_no_shadowenv() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        let result = run(path);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err().downcast_ref::<NoShadowenv>(),
+            Some(_)
+        ));
+    }
+
+    #[test]
+    fn test_write_gitignore_existing_file() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let gitignore_path = path.join(".gitignore");
+        fs::write(&gitignore_path, "/.*\n").unwrap(); // Pre-existing .gitignore content
+
+        write_gitignore(&path).unwrap();
+        let gitignore_content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(gitignore_content.contains("/.*\n!/.gitignore\n"));
+    }
+
+    #[test]
+    fn test_write_gitignore() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        write_gitignore(&path).unwrap();
+        let gitignore_content = fs::read_to_string(path.join(".gitignore")).unwrap();
+        assert!(gitignore_content.contains("/.*\n!/.gitignore\n"));
+    }
+
+    #[test]
+    fn test_ensure_dir_tree_trusted() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let result = ensure_dir_tree_trusted(&[path]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_trust_dir_non_writable() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+        let signer = load_or_generate_signer().unwrap();
+
+        // Make the directory non-writable
+        let mut perms = fs::metadata(&path).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&path, perms).unwrap();
+
+        let result = trust_dir(&signer, &path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_trust_dir_existing_signature() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let signer = load_or_generate_signer().unwrap();
+        trust_dir(&signer, &path).unwrap(); // Create initial signature
+
+        let result = trust_dir(&signer, &path); // Attempt to overwrite signature
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_trust_dir() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&path).unwrap();
+
+        let signer = load_or_generate_signer().unwrap();
+        let result = trust_dir(&signer, &path);
+        assert!(result.is_ok());
+    }
+}
+
 impl Display for NotTrusted {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.untrusted_directories.as_slice() {
@@ -90,7 +245,8 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
         Some(bytes) => {
             // We used to write the entire keypair to the file, but now we only write the private key.
             // So it's important to take only the first 32 bytes here.
-            let key_bytes: [u8; 32] = bytes[..32].try_into()
+            let key_bytes: [u8; 32] = bytes[..32]
+                .try_into()
                 .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
             Ok(SigningKey::from_bytes(&key_bytes))
         }
@@ -114,7 +270,7 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 
 /// Trust the closest parent shadowenv root to the current working dir and create a new signature file.
 pub fn run(dir: PathBuf) -> Result<(), Error> {
-    let signer = load_or_generate_signer().unwrap();
+    let signer = load_or_generate_signer()?;
 
     let roots = loader::find_shadowenv_paths(&dir)?;
     if roots.is_empty() {
@@ -123,7 +279,11 @@ pub fn run(dir: PathBuf) -> Result<(), Error> {
 
     // `roots`: Closer roots to current dir have lower indices, so we take the first element here.
     // Unwrap is safe: We're checking `is_empty` above.
-    trust_dir(&signer, roots.first().unwrap())?;
+    if let Some(first_root) = roots.first() {
+        trust_dir(&signer, first_root)?;
+    } else {
+        return Err(NoShadowenv {}.into());
+    }
     Ok(())
 }
 
