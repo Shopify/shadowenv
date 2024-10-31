@@ -70,10 +70,10 @@ mod tests {
 
     // Helper function to capture stdout during tests
     #[cfg(test)]
-    fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
+    fn with_captured_stdout<F>(_buf: &mut Vec<u8>, f: F)
     where F: FnOnce() {
         let stdout = io::stdout();
-        let handle = stdout.lock();
+        let _handle = stdout.lock();
         
         // Run the closure
         f();
