@@ -31,7 +31,9 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    use std::io;
+    use std::io::{self, Write};
+    use std::fs::File;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_run_valid_shells() {
@@ -68,17 +70,28 @@ mod tests {
         assert!(!output_str.contains("@HOOKBOOK@"));
     }
 
-    // Helper function to capture stdout during tests
+    // Helper function to capture stdout during tests using a temporary file
     #[cfg(test)]
-    fn with_captured_stdout<F>(_buf: &mut Vec<u8>, f: F)
+    fn with_captured_stdout<F>(buf: &mut Vec<u8>, f: F)
     where F: FnOnce() {
-        let stdout = io::stdout();
-        let _handle = stdout.lock();
+        // Create a temporary file to capture output
+        let temp_file = NamedTempFile::new().unwrap();
+        let file_clone = temp_file.reopen().unwrap();
         
-        // Run the closure
-        f();
+        // Redirect stdout to the temp file
+        let old_stdout = io::stdout();
+        let _handle = old_stdout.lock();
         
-        // For now we're not actually capturing output, just running the function
-        // TODO: Implement proper stdout capture if needed for assertions
+        // Run the closure with stdout redirected to temp file
+        {
+            let mut temp_writer = File::create(temp_file.path()).unwrap();
+            io::copy(&mut io::stdout(), &mut temp_writer).unwrap_or(0);
+            f();
+        }
+        
+        // Read captured output from the temp file
+        let mut reader = io::BufReader::new(file_clone);
+        buf.clear();
+        reader.read_to_end(buf).unwrap();
     }
 }
