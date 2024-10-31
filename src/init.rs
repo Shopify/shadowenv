@@ -26,3 +26,49 @@ fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {
     println!("{}", script);
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::io::{self, Write};
+
+    #[test]
+    fn test_run_valid_shells() {
+        assert_eq!(run("bash"), 0);
+        assert_eq!(run("zsh"), 0);
+        assert_eq!(run("fish"), 0);
+    }
+
+    #[test]
+    fn test_run_invalid_shell() {
+        assert_eq!(run("invalid"), 1);
+    }
+
+    #[test]
+    fn test_print_script_substitution() {
+        // Create test data
+        let test_path = PathBuf::from("/test/path/shadowenv");
+        let test_script = b"#!/bin/sh\nPATH=@SELF@\n@HOOKBOOK@\n";
+        
+        // Capture stdout
+        let mut output = Vec::new();
+        {
+            let mut old_stdout = io::stdout();
+            std::io::set_print!({
+                let mut w = &mut output;
+                move |s| w.write_all(s.as_bytes()).map(|_| ())
+            });
+            
+            assert_eq!(print_script(test_path.clone(), test_script), 0);
+        }
+        
+        // Convert captured output to string
+        let output_str = String::from_utf8(output).unwrap();
+        
+        // Verify substitutions
+        assert!(output_str.contains("/test/path/shadowenv"));
+        assert!(!output_str.contains("@SELF@"));
+        assert!(!output_str.contains("@HOOKBOOK@"));
+    }
+}
