@@ -7,10 +7,12 @@ pub struct Feature {
 }
 
 impl Feature {
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    #[allow(dead_code)]
     pub fn version(&self) -> Option<&str> {
         self.version.as_deref()
     }

@@ -72,6 +72,7 @@ fn test_missing_shadowenv_data() {
     assert_eq!(logger.0, expected);
 }
 #[derive(Default)]
+#[allow(dead_code)]
 struct DummyLogger(Vec<String>);
 
 impl Logger for DummyLogger {
