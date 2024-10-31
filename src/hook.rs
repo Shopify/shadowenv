@@ -287,16 +287,13 @@ mod tests {
         initial_env.insert("TO_BE_UNSET".to_string(), "remove_me".to_string());
 
         let mut data = undo::Data::default();
-        let shadowenv = Shadowenv::new(initial_env, data, 0);
+        let mut shadowenv = Shadowenv::new(initial_env, data, 0);
         
-        // Prepare mutations
-        let mut mutations = HashMap::new();
-        mutations.insert("NEW_VAR".to_string(), Some("new_value".to_string()));
-        mutations.insert("EXISTING_VAR".to_string(), Some("modified".to_string()));
-        mutations.insert("TO_BE_UNSET".to_string(), None);
+        // Apply mutations directly
+        shadowenv.set("NEW_VAR", Some("new_value"));
+        shadowenv.set("EXISTING_VAR", Some("modified"));
+        shadowenv.set("TO_BE_UNSET", None);
 
-        // Apply mutations through test-only method
-        let shadowenv = shadowenv.with_test_exports(mutations);
         mutate_own_env(&shadowenv).unwrap();
 
         // Verify environment changes
