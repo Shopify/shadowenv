@@ -90,7 +90,8 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
         Some(bytes) => {
             // We used to write the entire keypair to the file, but now we only write the private key.
             // So it's important to take only the first 32 bytes here.
-            let key_bytes: [u8; 32] = bytes[..32].try_into()
+            let key_bytes: [u8; 32] = bytes[..32]
+                .try_into()
                 .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
             Ok(SigningKey::from_bytes(&key_bytes))
         }
