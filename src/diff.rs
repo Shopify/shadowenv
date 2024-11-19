@@ -1,11 +1,10 @@
-use crate::undo;
-
-use std::collections::BTreeMap;
-use std::env;
+use crate::{cli::DiffCmd, shadowenv::Shadowenv, undo};
+use std::{collections::BTreeMap, env};
 
 trait Logger {
     fn print(&mut self, value: String);
 }
+
 struct StdoutLogger;
 
 impl Logger for StdoutLogger {
@@ -14,14 +13,17 @@ impl Logger for StdoutLogger {
     }
 }
 
-/// print a diff of the env
-pub fn run(verbose: bool, color: bool, shadowenv_data: String) -> i32 {
+/// Print a diff of the env.
+pub fn run(cmd: DiffCmd) {
+    let color = !cmd.no_color;
+    let data = Shadowenv::from_env();
+
     run_with_logger(
         &mut StdoutLogger {},
         env::vars().collect(),
-        verbose,
+        cmd.verbose,
         color,
-        shadowenv_data,
+        data,
     )
 }
 
@@ -31,7 +33,7 @@ fn run_with_logger(
     verbose: bool,
     color: bool,
     shadowenv_data: String,
-) -> i32 {
+) {
     let mut parts = shadowenv_data.splitn(2, ':');
     let _prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -41,6 +43,7 @@ fn run_with_logger(
         .iter()
         .map(|s| (s.name.clone(), s))
         .collect::<BTreeMap<_, _>>();
+
     let mut lists = shadowenv_data
         .lists
         .iter()
@@ -56,13 +59,14 @@ fn run_with_logger(
             print_verbose(logger, &name, &value)
         }
     }
+
     scalars
         .iter()
         .for_each(|(_name, scalar)| diff_scalar(logger, scalar, color));
+
     lists
         .iter()
         .for_each(|(_name, list)| diff_list(logger, list, "", color));
-    0
 }
 
 fn diff_list(logger: &mut dyn Logger, list: &undo::List, current: &str, color: bool) {
@@ -155,7 +159,7 @@ mod tests {
         ];
 
         let data = r#"62b0b9f86cda84d4:{"scalars":[],"lists":[{"name":"VAR_C","additions":["/added"],"deletions":["/removed"]},{"name":"VAR_B","additions":["/added"],"deletions":[]},{"name":"VAR_A","additions":["/added"],"deletions":[]}]}"#;
-        let result = run_with_logger(&mut logger, env_vars, false, false, data.to_string());
+        run_with_logger(&mut logger, env_vars, false, false, data.to_string());
 
         let expected: Vec<_> = [
             "- VAR_A=/existent",
@@ -168,7 +172,7 @@ mod tests {
         .iter()
         .map(ToString::to_string)
         .collect();
-        assert_eq!(result, 0);
+
         assert_eq!(logger.0, expected);
     }
 }

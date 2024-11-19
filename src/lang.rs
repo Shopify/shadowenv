@@ -1,5 +1,7 @@
-use crate::hash::{Source, SourceList};
-use crate::shadowenv::Shadowenv;
+use crate::{
+    hash::{Source, SourceList},
+    shadowenv::Shadowenv,
+};
 use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{

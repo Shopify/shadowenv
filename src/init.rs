@@ -1,21 +1,15 @@
+use crate::cli::InitCmd::{self, *};
 use std::path::PathBuf;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
-pub fn run(shellname: &str) -> i32 {
+pub fn run(cmd: InitCmd) {
     let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
-    match shellname {
-        "bash" => print_script(pb, include_bytes!("../sh/shadowenv.bash.in")),
-        "zsh" => print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),
-        "fish" => print_script(pb, include_bytes!("../sh/shadowenv.fish.in")),
-        _ => {
-            eprintln!(
-                "invalid shell name '{}' (must be one of bash, zsh, fish)",
-                shellname
-            );
-            1
-        }
-    }
+    match cmd {
+        Bash => print_script(pb, include_bytes!("../sh/shadowenv.bash.in")),
+        Zsh => print_script(pb, include_bytes!("../sh/shadowenv.zsh.in")),
+        Fish => print_script(pb, include_bytes!("../sh/shadowenv.fish.in")),
+    };
 }
 
 fn print_script(selfpath: PathBuf, bytes: &[u8]) -> i32 {

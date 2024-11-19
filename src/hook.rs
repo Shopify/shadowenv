@@ -1,12 +1,14 @@
 use crate::{
+    cli::HookCmd,
+    get_current_dir_or_exit,
     hash::{Hash, SourceList},
     lang::{self, ShadowLang},
     loader, output,
     shadowenv::Shadowenv,
     trust::ensure_dir_tree_trusted,
-    undo,
+    undo, unsafe_getppid,
 };
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use serde_derive::Serialize;
 use shell_escape as shell;
 use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
@@ -36,18 +38,40 @@ impl Modifications {
     }
 }
 
-pub fn run(
-    pathbuf: PathBuf,
-    shadowenv_data: String,
-    mode: VariableOutputMode,
-    force: bool,
-) -> Result<(), Error> {
-    match load_env(pathbuf, shadowenv_data, force)? {
-        Some(shadowenv) => {
-            apply_env(&shadowenv, mode)?;
+pub fn run(cmd: HookCmd) -> Result<(), Error> {
+    let mode = if cmd.format.porcelain {
+        VariableOutputMode::Porcelain
+    } else if cmd.format.fish {
+        VariableOutputMode::Fish
+    } else if cmd.format.json {
+        VariableOutputMode::Json
+    } else if cmd.format.pretty_json {
+        VariableOutputMode::PrettyJson
+    } else {
+        VariableOutputMode::Posix
+    };
+
+    let data = Shadowenv::from_env();
+    let result = load_env(get_current_dir_or_exit(), data, cmd.force).and_then(|loaded_env| {
+        if let Some(shadowenv) = loaded_env {
+            apply_env(&shadowenv, mode)
+        } else {
             Ok(())
         }
-        None => Ok(()),
+    });
+
+    // Reformat the error if needed.
+    if let Err(err) = result {
+        let pid = cmd
+            .shellpid
+            .unwrap_or_else(|| unsafe_getppid().expect("shadowenv bug: unable to get parent pid"));
+
+        match output::format_hook_error(err, pid, cmd.silent) {
+            Some(formatted) => Err(anyhow!(formatted)),
+            None => Err(anyhow!("")),
+        }
+    } else {
+        Ok(())
     }
 }
 

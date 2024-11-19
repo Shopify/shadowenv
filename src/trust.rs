@@ -1,4 +1,4 @@
-use crate::loader;
+use crate::{get_current_dir_or_exit, loader};
 use anyhow::Error;
 use ed25519_dalek::{Signature, Signer, SigningKey};
 use rand::rngs::OsRng;
@@ -90,7 +90,8 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
         Some(bytes) => {
             // We used to write the entire keypair to the file, but now we only write the private key.
             // So it's important to take only the first 32 bytes here.
-            let key_bytes: [u8; 32] = bytes[..32].try_into()
+            let key_bytes: [u8; 32] = bytes[..32]
+                .try_into()
                 .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
             Ok(SigningKey::from_bytes(&key_bytes))
         }
@@ -113,7 +114,8 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 }
 
 /// Trust the closest parent shadowenv root to the current working dir and create a new signature file.
-pub fn run(dir: PathBuf) -> Result<(), Error> {
+pub fn run() -> Result<(), Error> {
+    let dir = get_current_dir_or_exit();
     let signer = load_or_generate_signer().unwrap();
 
     let roots = loader::find_shadowenv_paths(&dir)?;
