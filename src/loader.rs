@@ -1,7 +1,7 @@
 use crate::hash::Source;
 use anyhow::Error;
 use std::{
-    env, fs, io, iter,
+    fs, io, iter,
     path::{Path, PathBuf},
 };
 
