@@ -1,5 +1,6 @@
 mod cli;
 mod diff;
+mod ejson;
 mod exec_cmd;
 mod features;
 mod hash;
