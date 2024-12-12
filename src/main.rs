@@ -6,7 +6,6 @@ mod features;
 mod hash;
 mod hook;
 mod init;
-mod json_path;
 mod lang;
 mod loader;
 mod output;

@@ -1,4 +1,6 @@
 //! File TODO: Too many `map_err`, can be beautified.
+//! EJSON TODO: Potential improvement: Cache decoded files for
+//!             multiple `env/ejson` on the same file.
 use base64::Engine;
 use crypto_box::{aead::Aead, Nonce, PublicKey, SalsaBox, SecretKey};
 use nom::{
@@ -52,15 +54,16 @@ pub fn load_ejson_file(path: &Path) -> Result<Map<String, Value>, EJsonError> {
     let priv_key = find_private_key(&parsed_file.public_key)?;
     decode_map(&mut parsed_file.other, &priv_key)?;
 
-    // Ok(parsed_file.other)
-    Err(EJsonError::BoxParseError("Wurstig".to_string()))
+    Ok(parsed_file.other)
 }
 
 fn decode_value(key: &str, value: &mut Value, private_key: &SecretKey) -> Result<(), EJsonError> {
     match value {
         Value::Object(obj) => decode_map(obj, private_key)?,
         Value::String(s) if !key.starts_with("_") => {
-            *value = Value::String(decode_ejson_string(s, private_key)?);
+            if let Some(s) = decode_ejson_string(s, private_key)? {
+                *value = Value::String(s);
+            }
         }
         Value::Array(array) => {
             for elem in array {
@@ -81,9 +84,14 @@ fn decode_map(map: &mut Map<String, Value>, private_key: &SecretKey) -> Result<(
     Ok(())
 }
 
-fn decode_ejson_string(s: &str, private_key: &SecretKey) -> Result<String, EJsonError> {
-    let (_, parsed) =
-        parse_ejson_box(&s).map_err(|err| EJsonError::BoxParseError(err.to_string()))?;
+fn decode_ejson_string(s: &str, private_key: &SecretKey) -> Result<Option<String>, EJsonError> {
+    let parsed = match parse_ejson_box(&s) {
+        Ok((_, parsed)) => parsed,
+
+        // Ignore value if we can't parse the box, for now.
+        // TODO: Do we want to assume that all non-underscore strings should be decodable? Then we can bubble the parse error.
+        Err(_) => return Ok(None),
+    };
 
     let keybox = SalsaBox::new(&parsed.encrypter_public_key()?, &private_key);
     let nonce = Nonce::from(parsed.nonce()?);
@@ -93,11 +101,13 @@ fn decode_ejson_string(s: &str, private_key: &SecretKey) -> Result<String, EJson
             EJsonError::BoxParseError(format!("Unable to decrypt secret box `{s}`: {}", err))
         })?;
 
-    String::from_utf8(decrypted_plaintext).map_err(|err| {
-        EJsonError::BoxParseError(format!(
-            "Decrypted message value for secret box `{s}` contains invalid UTF-8: {err}."
-        ))
-    })
+    String::from_utf8(decrypted_plaintext)
+        .map(Some)
+        .map_err(|err| {
+            EJsonError::BoxParseError(format!(
+                "Decrypted message value for secret box `{s}` contains invalid UTF-8: {err}."
+            ))
+        })
 }
 
 #[derive(Debug)]
@@ -174,13 +184,6 @@ fn parse_ejson_box<'input>(input: &'input str) -> IResult<&str, EJsonMessageBox<
         },
     ))
 }
-
-// fn extract_pubkey(ejson: &EJsonFile) -> VerifyingKey {
-//     let decoded = hex::decode(&ejson._public_key).unwrap();
-//     let key_bytes: [u8; 32] = decoded[..32].try_into().unwrap();
-
-//     VerifyingKey::from_bytes(&key_bytes).unwrap()
-// }
 
 fn find_private_key(hexed_key: &str) -> Result<SecretKey, EJsonError> {
     let hexed_private_key_bytes = read_to_string(format!("/opt/ejson/keys/{hexed_key}"))?;

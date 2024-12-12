@@ -1,14 +1,13 @@
 use crate::{
     ejson,
     hash::{Source, SourceList},
-    json_path::JsonPath,
     shadowenv::Shadowenv,
 };
+use anyhow::anyhow;
 use json_dotpath::DotPaths;
 use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
-    borrow::BorrowMut,
     cell::{Ref, RefCell},
     env, fs,
     ops::DerefMut,
@@ -265,9 +264,11 @@ impl ShadowLang {
             })
         });
 
+        // TODO: Should an eval error here stop the entire env injection? Right now, it just logs an error to stderr.
         interp.scope().add_value_with_name("env/ejson", |name| {
             Value::new_foreign_fn(name, move |ctx, args| {
-                assert_args!(args, 2, name);
+                assert_args!(args, 1, name); // We need at least one argument, which is the filename to load.
+
                 let path = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let expanded = shellexpand::tilde(path);
                 let canonicalized = match fs::canonicalize(expanded.to_string()) {
@@ -281,7 +282,27 @@ impl ShadowLang {
                     }
                 };
 
-                let subtree: &str = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                let subpaths = args.get(1).and_then(|second_arg| match second_arg {
+                    Value::List(elements) => {
+                        // TODO: Handle invalid inputs.
+                        Some(
+                            elements
+                                .iter()
+                                .filter_map(|elem| match elem {
+                                    Value::Char(c) => Some(c.to_string()),
+                                    Value::String(s) => Some(s.to_string()),
+                                    _ => None,
+                                })
+                                .collect(),
+                        )
+                    }
+                    Value::String(s) => Some(vec![s.to_string()]),
+                    Value::Unit => None,
+                    _ => None,
+                });
+
+                // let subtree_path: &str = <&str as FromValueRef>::from_value_ref(&args[1])?;
+
                 let shadowenv_value = get_value(ctx, shadowenv_name);
                 let shadowenv =
                     <&ShadowenvWrapper as FromValueRef>::from_value_ref(&shadowenv_value)?;
@@ -289,9 +310,30 @@ impl ShadowLang {
 
                 // TODO: Technically we shouldn't decode the entire file, only the queried subtree.
                 //       This may matter on large secret files where we only pick a small subset.
+                // TODO: This code needs some cleanup.
                 match ejson::load_ejson_file(&canonicalized) {
                     Ok(ejson) => {
-                        inject_ejson_contents(subtree, ejson, shadowenv_ref.deref_mut()).unwrap();
+                        if let Some(subpaths) = subpaths {
+                            for subpath in subpaths {
+                                let _ = identify_ejson_subtree(&subpath, &ejson)
+                                    .and_then(|subtree| {
+                                        inject_ejson_contents(
+                                            subpath.split(".").last().unwrap(),
+                                            &subtree,
+                                            shadowenv_ref.deref_mut(),
+                                        )
+                                    })
+                                    .inspect_err(|err| eprintln!("{err}"));
+                            }
+                        } else {
+                            // Load entire file.
+                            let _ = inject_ejson_contents(
+                                "",
+                                &serde_json::Value::Object(ejson),
+                                shadowenv_ref.deref_mut(),
+                            )
+                            .inspect_err(|err| eprintln!("{err}"));
+                        }
                     }
 
                     Err(err) => {
@@ -354,40 +396,66 @@ impl ShadowLang {
                 return Err(err);
             };
         }
+
         if let Ok(dir) = original_path {
             let _ = env::set_current_dir(dir);
         }
+
         Ok(())
     }
 }
 
-fn inject_ejson_contents(
-    // at_path: JsonPath,
+fn identify_ejson_subtree(
     at_path: &str,
-    ejson: serde_json::Map<String, serde_json::Value>,
+    ejson: &serde_json::Map<String, serde_json::Value>,
+) -> Result<serde_json::Value, anyhow::Error> {
+    // TODO: It is unclear how the traversal & injection should actually work, eg.:
+    // - How to handle arrays? Ignore them, use indexed keys (key_0=elem0, key_1=elem1, ...) or use compound values (key="elem1,elem2,...")
+    //      - Compounding has problems with deeper nesting (`a: [{b: "b"}, ...]`). Indexing seems to be more universal.
+    // - How to handle nulls?
+    // - How should nested object keys compose? `{ a: { b: "c" }}` -> `A_B=c` or `B=c`?
+    // - How to compose the name of the env var? `(env/ejson "..." "path.to.obj")` -> `OBJ_KEY1=VAL1`` or `KEY1=VAL1` or ...?
+    // TODO: Unfortunately this copies the data, we should write our own simple dotpath traversal.
+    match ejson.dot_get::<serde_json::Value>(at_path)? {
+        Some(value) => Ok(value),
+        None => {
+            return Err(anyhow!("Json path {at_path} does not exist or is null."));
+        }
+    }
+}
+
+fn inject_ejson_contents(
+    key: &str,
+    value: &serde_json::Value,
     shadowenv: &mut Shadowenv,
 ) -> Result<(), anyhow::Error> {
-    match ejson.dot_get::<serde_json::Value>(at_path) {
-        Ok(Some(ref value)) => {
-            let set_value = match value {
-                serde_json::Value::Null => None, // TODO? Invalid? Remove value? Ignore?
-                bool @ serde_json::Value::Bool(_) => serde_json::to_string(bool).ok(),
-                num @ serde_json::Value::Number(_) => serde_json::to_string(num).ok(),
-                serde_json::Value::String(s) => Some(s.to_owned()),
-                serde_json::Value::Array(vec) => todo!(),
-                serde_json::Value::Object(map) => todo!(),
-            };
+    let key = key.replace(".", "_").to_ascii_uppercase();
+    match value {
+        serde_json::Value::Null => return Ok(()), // TODO: Invalid? Unset value? Ignore? Ignoring for now.
+        serde_json::Value::String(s) => shadowenv.set(&key, Some(s)),
 
-            shadowenv.set(at_path.split(".").last().unwrap(), set_value.as_deref());
-
-            Ok(())
+        bool @ serde_json::Value::Bool(_) => {
+            shadowenv.set(&key, serde_json::to_string(bool).ok().as_deref())
         }
 
-        Ok(None) => {
-            todo!()
+        num @ serde_json::Value::Number(_) => {
+            shadowenv.set(&key, serde_json::to_string(num).ok().as_deref())
         }
-        Err(_) => todo!(),
-    }
+
+        serde_json::Value::Array(array) => {
+            for (index, elem) in array.iter().enumerate() {
+                inject_ejson_contents(&format!("{key}_{index}"), elem, shadowenv)?;
+            }
+        }
+
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                inject_ejson_contents(&format!("{key}_{k}"), v, shadowenv)?;
+            }
+        }
+    };
+
+    Ok(())
 }
 
 #[cfg(test)]
