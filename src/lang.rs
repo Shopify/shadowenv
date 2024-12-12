@@ -267,7 +267,13 @@ impl ShadowLang {
         // TODO: Should an eval error here stop the entire env injection? Right now, it just logs an error to stderr.
         interp.scope().add_value_with_name("env/ejson", |name| {
             Value::new_foreign_fn(name, move |ctx, args| {
-                assert_args!(args, 1, name); // We need at least one argument, which is the filename to load.
+                if args.len() < 1 {
+                    return Err(From::from(ketos::exec::ExecError::ArityError {
+                        name: Some(name),
+                        expected: ketos::function::Arity::Min(1),
+                        found: 0,
+                    }));
+                }
 
                 let path = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let expanded = shellexpand::tilde(path);
