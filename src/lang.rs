@@ -1,7 +1,9 @@
 use crate::{
+    ejson,
     hash::{Source, SourceList},
     shadowenv::Shadowenv,
 };
+use json_dotpath::DotPaths;
 use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
@@ -52,9 +54,11 @@ impl ShadowenvWrapper {
     fn new(shadowenv: Shadowenv) -> Self {
         Self(RefCell::new(shadowenv))
     }
+
     fn borrow_mut_env(&self) -> std::cell::RefMut<Shadowenv> {
         self.0.borrow_mut()
     }
+
     fn borrow_env(&self) -> Ref<'_, Shadowenv> {
         self.0.borrow()
     }
@@ -86,8 +90,10 @@ impl ShadowLang {
         for source in sources.consume() {
             Self::run(&wrapper, source)?;
         }
+
         let mut result = Rc::try_unwrap(wrapper).unwrap().into_inner();
         result.add_dirs(dirs);
+
         Ok(result)
     }
 
@@ -253,6 +259,54 @@ impl ShadowLang {
                 Ok(<String as Into<Value>>::into(
                     canonicalized.to_string_lossy().to_string(),
                 ))
+            })
+        });
+
+        interp.scope().add_value_with_name("env/ejson", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 2, name);
+                let path = <&str as FromValueRef>::from_value_ref(&args[0])?;
+                let expanded = shellexpand::tilde(path);
+                let canonicalized = match fs::canonicalize(expanded.to_string()) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        return Err(From::from(ketos::io::IoError {
+                            err: e,
+                            path: PathBuf::from(path),
+                            mode: ketos::io::IoMode::Read,
+                        }));
+                    }
+                };
+
+                let subtree: &str = <&str as FromValueRef>::from_value_ref(&args[1])?;
+                let mut loaded_file = ejson::load_ejson_file(&canonicalized).unwrap();
+
+                let value = get_value(ctx, shadowenv_name);
+                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
+
+                match loaded_file.dot_get::<serde_json::Value>(subtree) {
+                    Ok(Some(ref value)) => {
+                        let set_value = match value {
+                            serde_json::Value::Null => None, // TODO? Invalid? Remove value? Ignore?
+                            bool @ serde_json::Value::Bool(_) => serde_json::to_string(bool).ok(),
+                            num @ serde_json::Value::Number(_) => serde_json::to_string(num).ok(),
+                            serde_json::Value::String(s) => Some(s.to_owned()),
+                            serde_json::Value::Array(vec) => todo!(),
+                            serde_json::Value::Object(map) => todo!(),
+                        };
+
+                        shadowenv
+                            .borrow_mut_env()
+                            .set(subtree.split(".").last().unwrap(), set_value.as_deref());
+                    }
+
+                    Ok(None) => {
+                        todo!()
+                    }
+                    Err(_) => todo!(),
+                };
+
+                Ok(Value::Unit)
             })
         });
 
