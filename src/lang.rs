@@ -436,6 +436,12 @@ fn inject_ejson_contents(
     shadowenv: &mut Shadowenv,
 ) -> Result<(), anyhow::Error> {
     let key = key.replace(".", "_").to_ascii_uppercase();
+    let prefix = if key.is_empty() {
+        "".to_owned()
+    } else {
+        format!("{key}_")
+    };
+
     match value {
         serde_json::Value::Null => return Ok(()), // TODO: Invalid? Unset value? Ignore? Ignoring for now.
         serde_json::Value::String(s) => shadowenv.set(&key, Some(s)),
@@ -450,13 +456,13 @@ fn inject_ejson_contents(
 
         serde_json::Value::Array(array) => {
             for (index, elem) in array.iter().enumerate() {
-                inject_ejson_contents(&format!("{key}_{index}"), elem, shadowenv)?;
+                inject_ejson_contents(&format!("{prefix}{index}"), elem, shadowenv)?;
             }
         }
 
         serde_json::Value::Object(map) => {
             for (k, v) in map {
-                inject_ejson_contents(&format!("{key}_{k}"), v, shadowenv)?;
+                inject_ejson_contents(&format!("{prefix}{k}"), v, shadowenv)?;
             }
         }
     };
