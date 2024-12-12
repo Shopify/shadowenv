@@ -1,14 +1,17 @@
 use crate::{
     ejson,
     hash::{Source, SourceList},
+    json_path::JsonPath,
     shadowenv::Shadowenv,
 };
 use json_dotpath::DotPaths;
 use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
+    borrow::BorrowMut,
     cell::{Ref, RefCell},
     env, fs,
+    ops::DerefMut,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -279,31 +282,24 @@ impl ShadowLang {
                 };
 
                 let subtree: &str = <&str as FromValueRef>::from_value_ref(&args[1])?;
-                let mut loaded_file = ejson::load_ejson_file(&canonicalized).unwrap();
+                let shadowenv_value = get_value(ctx, shadowenv_name);
+                let shadowenv =
+                    <&ShadowenvWrapper as FromValueRef>::from_value_ref(&shadowenv_value)?;
+                let mut shadowenv_ref = shadowenv.borrow_mut_env();
 
-                let value = get_value(ctx, shadowenv_name);
-                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
-
-                match loaded_file.dot_get::<serde_json::Value>(subtree) {
-                    Ok(Some(ref value)) => {
-                        let set_value = match value {
-                            serde_json::Value::Null => None, // TODO? Invalid? Remove value? Ignore?
-                            bool @ serde_json::Value::Bool(_) => serde_json::to_string(bool).ok(),
-                            num @ serde_json::Value::Number(_) => serde_json::to_string(num).ok(),
-                            serde_json::Value::String(s) => Some(s.to_owned()),
-                            serde_json::Value::Array(vec) => todo!(),
-                            serde_json::Value::Object(map) => todo!(),
-                        };
-
-                        shadowenv
-                            .borrow_mut_env()
-                            .set(subtree.split(".").last().unwrap(), set_value.as_deref());
+                // TODO: Technically we shouldn't decode the entire file, only the queried subtree.
+                //       This may matter on large secret files where we only pick a small subset.
+                match ejson::load_ejson_file(&canonicalized) {
+                    Ok(ejson) => {
+                        inject_ejson_contents(subtree, ejson, shadowenv_ref.deref_mut()).unwrap();
                     }
 
-                    Ok(None) => {
-                        todo!()
+                    Err(err) => {
+                        // TODO: How to error handle correctly here? Should we repurpose `output::format_hook_error`?
+                        // Note: Any print to stdout seems to be treated as input to the interpreter, must use stderr.
+                        eprintln!("Error evalutating ejson: {err}");
+                        return Ok(Value::Unit);
                     }
-                    Err(_) => todo!(),
                 };
 
                 Ok(Value::Unit)
@@ -362,6 +358,35 @@ impl ShadowLang {
             let _ = env::set_current_dir(dir);
         }
         Ok(())
+    }
+}
+
+fn inject_ejson_contents(
+    // at_path: JsonPath,
+    at_path: &str,
+    ejson: serde_json::Map<String, serde_json::Value>,
+    shadowenv: &mut Shadowenv,
+) -> Result<(), anyhow::Error> {
+    match ejson.dot_get::<serde_json::Value>(at_path) {
+        Ok(Some(ref value)) => {
+            let set_value = match value {
+                serde_json::Value::Null => None, // TODO? Invalid? Remove value? Ignore?
+                bool @ serde_json::Value::Bool(_) => serde_json::to_string(bool).ok(),
+                num @ serde_json::Value::Number(_) => serde_json::to_string(num).ok(),
+                serde_json::Value::String(s) => Some(s.to_owned()),
+                serde_json::Value::Array(vec) => todo!(),
+                serde_json::Value::Object(map) => todo!(),
+            };
+
+            shadowenv.set(at_path.split(".").last().unwrap(), set_value.as_deref());
+
+            Ok(())
+        }
+
+        Ok(None) => {
+            todo!()
+        }
+        Err(_) => todo!(),
     }
 }
 

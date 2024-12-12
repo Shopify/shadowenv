@@ -52,7 +52,8 @@ pub fn load_ejson_file(path: &Path) -> Result<Map<String, Value>, EJsonError> {
     let priv_key = find_private_key(&parsed_file.public_key)?;
     decode_map(&mut parsed_file.other, &priv_key)?;
 
-    Ok(parsed_file.other)
+    // Ok(parsed_file.other)
+    Err(EJsonError::BoxParseError("Wurstig".to_string()))
 }
 
 fn decode_value(key: &str, value: &mut Value, private_key: &SecretKey) -> Result<(), EJsonError> {
@@ -183,8 +184,8 @@ fn parse_ejson_box<'input>(input: &'input str) -> IResult<&str, EJsonMessageBox<
 
 fn find_private_key(hexed_key: &str) -> Result<SecretKey, EJsonError> {
     let hexed_private_key_bytes = read_to_string(format!("/opt/ejson/keys/{hexed_key}"))?;
-    let decoded_bytes = hex::decode(hexed_private_key_bytes)
-        .map_err(|_err| EJsonError::BoxParseError("Key is invalid base64".to_owned()))?;
+    let decoded_bytes = hex::decode(hexed_private_key_bytes.trim_end_matches("\n"))
+        .map_err(|_err| EJsonError::BoxParseError("Key is invalid hex".to_owned()))?;
 
     let key_bytes: [u8; 32] = decoded_bytes[..32].try_into().map_err(|_err| {
         EJsonError::BoxParseError("Invalid key length, must be 32 bytes".to_owned())
