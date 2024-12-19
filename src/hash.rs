@@ -5,20 +5,24 @@ use blake2::{
 };
 use std::{
     cmp::{Ord, Ordering},
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     fmt::Display,
-    fs,
+    fs::{self, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
     result::Result,
     str::FromStr,
+    time::UNIX_EPOCH,
 };
+
+use crate::loader::{SHADOWENV_DIR_NAME, SHADOWENV_LINKED_EJSON_FILES_NAME};
 
 const FILE_SEPARATOR: &str = "\x1C";
 const GROUP_SEPARATOR: &str = "\x1D";
 
 #[derive(Debug, Clone)]
 pub struct SourceList {
-    sources: VecDeque<Source>,
+    pub sources: VecDeque<Source>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,8 +31,12 @@ pub struct Source {
     pub files: Vec<SourceFile>,
 
     /// Any EJSON files linked to the source files.
-    /// Retrieved from the .linked-files marker.
+    /// Retrieved from the ejson files marker in .shadowenv.d.
     pub ejson_file_paths: Vec<PathBuf>,
+
+    /// Added during execution. Any ejson files that were actually used
+    /// during evaluation. Used to maintain the marker file.
+    pub used_ejson_files: HashSet<PathBuf>,
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -70,6 +78,7 @@ impl Source {
             dir,
             files: vec![],
             ejson_file_paths: vec![],
+            used_ejson_files: HashSet::default(),
         }
     }
 
@@ -86,6 +95,10 @@ impl Source {
         }
 
         Ok(())
+    }
+
+    pub fn set_used_ejson_paths(&mut self, files: HashSet<PathBuf>) {
+        self.used_ejson_files = files;
     }
 
     pub fn hash(&self) -> Option<u64> {
@@ -126,11 +139,55 @@ impl Source {
             .filter_map(|path| {
                 let metadata = std::fs::metadata(path).ok()?;
                 let modified = metadata.modified().ok()?;
-                let modified = modified.elapsed().ok()?.as_nanos();
+                let modified = modified
+                    .duration_since(UNIX_EPOCH)
+                    .expect("System time to be > UNIX_EPOCH");
 
-                Some(format!("{}:{}", path.to_str()?, modified))
+                Some(format!(
+                    "{}:{}.{}",
+                    path.to_str()?,
+                    modified.as_secs(),
+                    modified.subsec_millis()
+                ))
             })
             .collect()
+    }
+
+    // TODO: rough impl, unwraps like a child on christmas.
+    fn update_ejson_marker(&mut self) {
+        // Check if the marker needs to be updated.
+        let unchanged = self.used_ejson_files.len() == self.ejson_file_paths.len()
+            && self.used_ejson_files
+                == HashSet::from_iter(self.ejson_file_paths.clone().into_iter());
+
+        if !unchanged {
+            // Just write the used ones normalized into the marker.
+            let marker_file_path = PathBuf::from(&self.dir)
+                .join(SHADOWENV_DIR_NAME)
+                .join(SHADOWENV_LINKED_EJSON_FILES_NAME);
+
+            let mut marker_file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(marker_file_path)
+                .unwrap();
+
+            let mut lines: Vec<_> = self
+                .used_ejson_files
+                .clone()
+                .into_iter()
+                .map(|path| path.to_str().unwrap().to_owned())
+                .collect();
+
+            // Ordering matters for the hashing!
+            lines.sort();
+            marker_file
+                .write_all(&lines.join("\n").into_bytes())
+                .unwrap();
+
+            marker_file.flush().unwrap();
+        }
     }
 }
 
@@ -198,10 +255,6 @@ impl SourceList {
         Some(u64::from_ne_bytes(buf))
     }
 
-    pub fn consume(self) -> Vec<Source> {
-        self.sources.into()
-    }
-
     pub fn shortened_dirs(&self) -> Vec<PathBuf> {
         let dirs: Vec<PathBuf> = self
             .sources
@@ -224,6 +277,12 @@ impl SourceList {
                     .fold(PathBuf::new(), |acc, comp| acc.join(comp))
             })
             .collect()
+    }
+
+    pub fn update_ejson_markers(&mut self) {
+        for source in self.sources.iter_mut() {
+            source.update_ejson_marker();
+        }
     }
 }
 
@@ -249,6 +308,7 @@ mod tests {
                 dir: Arbitrary::arbitrary(g),
                 files: Arbitrary::arbitrary(g),
                 ejson_file_paths: Arbitrary::arbitrary(g),
+                used_ejson_files: Arbitrary::arbitrary(g),
             }
         }
     }

@@ -9,6 +9,7 @@ use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
     cell::{Ref, RefCell},
+    collections::HashSet,
     env, fs,
     ops::DerefMut,
     path::{Path, PathBuf},
@@ -50,30 +51,35 @@ macro_rules! assert_args {
 // Sharing a value with Ketos means we can only access it through `&self`.
 // Mutation of values is possible through internally mutable containers,
 // such as `Cell` and `RefCell`.
-struct ShadowenvWrapper(RefCell<Shadowenv>);
+struct RefCellWrapper<T>(RefCell<T>)
+where
+    T: std::fmt::Debug + 'static;
 
-impl ShadowenvWrapper {
-    fn new(shadowenv: Shadowenv) -> Self {
-        Self(RefCell::new(shadowenv))
+impl<T> RefCellWrapper<T>
+where
+    T: std::fmt::Debug + 'static,
+{
+    fn new(inner: T) -> Self {
+        Self(RefCell::new(inner))
     }
 
-    fn borrow_mut_env(&self) -> std::cell::RefMut<Shadowenv> {
+    fn borrow_mut_env(&self) -> std::cell::RefMut<T> {
         self.0.borrow_mut()
     }
 
-    fn borrow_env(&self) -> Ref<'_, Shadowenv> {
+    fn borrow_env(&self) -> Ref<'_, T> {
         self.0.borrow()
     }
 
-    fn into_inner(self) -> Shadowenv {
+    fn into_inner(self) -> T {
         self.0.into_inner()
     }
 }
 
-fn get_value(ctx: &Context, shadowenv_name: Name) -> Value {
+fn get_value(ctx: &Context, value_name: Name) -> Value {
     ctx.scope()
-        .get_constant(shadowenv_name)
-        .expect("bug: shadowenv not defined")
+        .get_constant(value_name)
+        .expect("bug: value not defined")
 }
 
 fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
@@ -86,11 +92,18 @@ fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
 }
 
 impl ShadowLang {
-    pub fn run_programs(shadowenv: Shadowenv, sources: SourceList) -> Result<Shadowenv, Error> {
-        let wrapper = Rc::new(ShadowenvWrapper::new(shadowenv));
+    pub fn run_programs(
+        shadowenv: Shadowenv,
+        sources: &mut SourceList,
+    ) -> Result<Shadowenv, Error> {
+        let wrapper = Rc::new(RefCellWrapper::new(shadowenv));
+
         let dirs = sources.shortened_dirs();
-        for source in sources.consume() {
-            Self::run(&wrapper, source)?;
+        for source in sources.sources.iter_mut() {
+            let ejson_tracker_wrapper = Rc::new(RefCellWrapper::new(HashSet::default()));
+            Self::run(&wrapper, &ejson_tracker_wrapper, source)?;
+            source
+                .set_used_ejson_paths(Rc::try_unwrap(ejson_tracker_wrapper).unwrap().into_inner());
         }
 
         let mut result = Rc::try_unwrap(wrapper).unwrap().into_inner();
@@ -99,7 +112,11 @@ impl ShadowLang {
         Ok(result)
     }
 
-    fn run(rc_wrapper: &Rc<ShadowenvWrapper>, source: Source) -> Result<(), Error> {
+    fn run(
+        rc_wrapper: &Rc<RefCellWrapper<Shadowenv>>,
+        ejson_tracker_wrapper: &Rc<RefCellWrapper<HashSet<PathBuf>>>,
+        source: &mut Source,
+    ) -> Result<(), Error> {
         let mut restrictions = ketos::RestrictConfig::strict();
         // "Maximum size of value stack, in values"
         // This also puts a cap on the size of string literals in a single function invocation.
@@ -115,10 +132,16 @@ impl ShadowLang {
             .finish();
 
         let shadowenv_name = interp.scope().add_name("shadowenv");
+        let ejson_tracker_name = interp.scope().add_name("used_ejson");
 
         interp
             .scope()
             .add_constant(shadowenv_name, Value::Foreign(rc_wrapper.clone()));
+
+        interp.scope().add_constant(
+            ejson_tracker_name,
+            Value::Foreign(ejson_tracker_wrapper.clone()),
+        );
 
         ketos_fn2! { interp.scope() => "path-concat" =>
         fn path_concat(...) -> String }
@@ -128,7 +151,7 @@ impl ShadowLang {
                 assert_args!(args, 1, name);
 
                 let value = get_value(ctx, shadowenv_name);
-                let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
+                let wrapper: &RefCellWrapper<Shadowenv> = FromValueRef::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
                 let result = wrapper
@@ -145,7 +168,8 @@ impl ShadowLang {
                 assert_args!(args, 2, name);
 
                 let value = get_value(ctx, shadowenv_name);
-                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
+                let shadowenv =
+                    <&RefCellWrapper<Shadowenv> as FromValueRef>::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let value = <&str as FromValueRef>::from_value_ref(&args[1]).ok();
 
@@ -161,7 +185,7 @@ impl ShadowLang {
                     assert_args!(args, 2, name);
 
                     let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
+                    let wrapper: &RefCellWrapper<Shadowenv> = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
@@ -177,7 +201,7 @@ impl ShadowLang {
                     assert_args!(args, 2, name);
 
                     let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
+                    let wrapper: &RefCellWrapper<Shadowenv> = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
@@ -193,7 +217,7 @@ impl ShadowLang {
                     assert_args!(args, 2, name);
 
                     let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
+                    let wrapper: &RefCellWrapper<Shadowenv> = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
@@ -209,7 +233,7 @@ impl ShadowLang {
                     assert_args!(args, 2, name);
 
                     let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
+                    let wrapper: &RefCellWrapper<Shadowenv> = FromValueRef::from_value_ref(&value)?;
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
@@ -223,7 +247,7 @@ impl ShadowLang {
         interp.scope().add_value_with_name("provide", |name| {
             Value::new_foreign_fn(name, move |ctx, args| {
                 let value = get_value(ctx, shadowenv_name);
-                let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
+                let wrapper: &RefCellWrapper<Shadowenv> = FromValueRef::from_value_ref(&value)?;
 
                 let version = match args.len() {
                     1 => None,
@@ -307,12 +331,18 @@ impl ShadowLang {
                     _ => None,
                 });
 
-                // let subtree_path: &str = <&str as FromValueRef>::from_value_ref(&args[1])?;
-
                 let shadowenv_value = get_value(ctx, shadowenv_name);
                 let shadowenv =
-                    <&ShadowenvWrapper as FromValueRef>::from_value_ref(&shadowenv_value)?;
+                    <&RefCellWrapper<Shadowenv> as FromValueRef>::from_value_ref(&shadowenv_value)?;
                 let mut shadowenv_ref = shadowenv.borrow_mut_env();
+
+                let esjon_tracker_value = get_value(ctx, ejson_tracker_name);
+                let esjon_tracker =
+                    <&RefCellWrapper<HashSet<PathBuf>> as FromValueRef>::from_value_ref(
+                        &esjon_tracker_value,
+                    )?;
+                let mut esjon_tracker_ref = esjon_tracker.borrow_mut_env();
+                esjon_tracker_ref.insert(canonicalized.clone());
 
                 // TODO: Technically we shouldn't decode the entire file, only the queried subtree.
                 //       This may matter on large secret files where we only pick a small subset.
@@ -486,6 +516,7 @@ mod tests {
                 contents: content.to_string(),
             }],
             ejson_file_paths: vec![],
+            used_ejson_files: HashSet::default(),
         }
     }
 
@@ -508,7 +539,7 @@ mod tests {
         );
 
         let result =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
+            ShadowLang::run_programs(shadowenv, &mut SourceList::new_with_sources(vec![source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["VAL_A"].as_ref().unwrap(), "42");
@@ -532,7 +563,7 @@ mod tests {
         );
 
         let result =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
+            ShadowLang::run_programs(shadowenv, &mut SourceList::new_with_sources(vec![source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["PATH_A"].as_ref().unwrap(), "/path3:/path1:/path2");
@@ -558,7 +589,7 @@ mod tests {
         );
 
         let result =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
+            ShadowLang::run_programs(shadowenv, &mut SourceList::new_with_sources(vec![source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["PATH"].as_ref().unwrap(), "/something_else");
@@ -575,7 +606,7 @@ mod tests {
         );
 
         let shadowenv =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
+            ShadowLang::run_programs(shadowenv, &mut SourceList::new_with_sources(vec![source]))
                 .unwrap();
         let expected = HashSet::from([Feature::new("ruby".to_string(), Some("3.1.2".to_string()))]);
         assert_eq!(shadowenv.features(), expected);
@@ -592,7 +623,7 @@ mod tests {
         );
         let home = dirs::home_dir().map(|p| p.into_os_string().into_string().unwrap());
         let shadowenv =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
+            ShadowLang::run_programs(shadowenv, &mut SourceList::new_with_sources(vec![source]))
                 .unwrap();
         assert_eq!(shadowenv.get("EXPANDED"), home);
     }
@@ -616,7 +647,7 @@ mod tests {
         // The source that comes last in the input list should be executed last
         let shadowenv = ShadowLang::run_programs(
             shadowenv,
-            SourceList::new_with_sources(vec![outer_source, inner_source]),
+            &mut SourceList::new_with_sources(vec![outer_source, inner_source]),
         )
         .unwrap();
         assert_eq!(shadowenv.get("TEST"), Some("TWO".to_string()));
