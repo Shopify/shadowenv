@@ -84,49 +84,58 @@ pub fn load_env(
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
 
-    let active: Option<Hash> = match prev_hash {
+    let active_sources_hash: Option<Hash> = match prev_hash {
         None => None,
         Some("") => None,
         Some("0000000000000000") => None,
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    // "targets" are sources of shadowenv lisp files
-    let targets = load_trusted_sources(pathbuf, false)?;
+    // Found sources of shadowenv lisp files
+    let sources = load_trusted_sources(pathbuf, false)?;
+    let found_sources_hash = sources
+        .as_ref()
+        .and_then(|source_lists| source_lists.hash());
 
-    let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
-
-    // before we had multiple targets, this ensured we only act if we needed to
-    match (&active, &targets) {
-        // if there is no active shadowenv and we've got no targets, then we have nothing to compute
+    // Check if we need to run the shaowenv programs or recompute
+    match (active_sources_hash, found_sources_hash) {
+        // If there is no active shadowenv and we found no sources, then we have nothing to compute.
         (None, None) => {
             return Ok(None);
         }
-        // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
-        // unless the force flag was specified
-        // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
-        (Some(a), Some(_)) if a.hash == targets_hash.unwrap() && !force => {
+
+        // If there is an active shadowenv and some action we've taken leads us to still be in the same one,
+        // we do nothing unless the force flag was specified.
+        // TODO: Probably need to update whatever sets prev_hash to be a hash of all the source lists' hashes (?)
+        (Some(ref active), Some(found)) if active.hash == found && !force => {
             return Ok(None);
         }
+
+        // Run shadowenv programs in all other cases.
         (_, _) => (),
     }
 
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
+    let shadowenv = Shadowenv::new(env::vars().collect(), data, found_sources_hash.unwrap_or(0));
 
-    match targets {
-        Some(targets) => {
+    match sources {
+        Some(mut source_lists) => {
             // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
-            match ShadowLang::run_programs(shadowenv, targets) {
+            match ShadowLang::run_programs(shadowenv, &mut source_lists) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
                 Err(_) => Err(lang::ShadowlispError {}.into()),
                 // note the "true" since we ran code to activate/modify the shadowenv
-                Ok(shadowenv) => Ok(Some(shadowenv)),
+                Ok(shadowenv) => {
+                    // todo maintain marker files
+                    source_lists.update_ejson_markers();
+                    Ok(Some(shadowenv))
+                }
             }
         }
+
         // note the "false" since we didn't have anything to run
         None => Ok(Some(shadowenv)),
     }
@@ -288,7 +297,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let sources = result.consume();
+        let sources = result.sources;
         assert_eq!(sources.len(), 2);
 
         // Assert that sources are returned in the correct order
