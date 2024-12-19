@@ -7,7 +7,8 @@ use std::{
     cmp::{Ord, Ordering},
     collections::VecDeque,
     fmt::Display,
-    path::PathBuf,
+    fs,
+    path::{Path, PathBuf},
     result::Result,
     str::FromStr,
 };
@@ -24,6 +25,10 @@ pub struct SourceList {
 pub struct Source {
     pub dir: String,
     pub files: Vec<SourceFile>,
+
+    /// Any EJSON files linked to the source files.
+    /// Retrieved from the .linked-files marker.
+    pub ejson_file_paths: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -61,11 +66,26 @@ struct WrongInputSize;
 
 impl Source {
     pub fn new(dir: String) -> Self {
-        Source { dir, files: vec![] }
+        Source {
+            dir,
+            files: vec![],
+            ejson_file_paths: vec![],
+        }
     }
 
     pub fn add_file(&mut self, name: String, contents: String) {
         self.files.push(SourceFile { name, contents })
+    }
+
+    pub fn add_ejson_links(&mut self, from_file: &PathBuf) -> Result<(), std::io::Error> {
+        for line in fs::read_to_string(&from_file)?.lines() {
+            let path = Path::new(line);
+            if let Ok(path) = path.canonicalize() {
+                self.ejson_file_paths.push(path);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn hash(&self) -> Option<u64> {
@@ -84,10 +104,33 @@ impl Source {
             hasher.update(FILE_SEPARATOR.as_bytes());
         }
 
+        for fingerprint in self.ejson_fingerprints() {
+            hasher.update(fingerprint.as_bytes());
+            hasher.update(GROUP_SEPARATOR.as_bytes());
+        }
+
         let mut buf = [0u8; 8];
         hasher.finalize_variable(&mut buf).unwrap();
 
         Some(u64::from_ne_bytes(buf))
+    }
+
+    /// Returns the fingerprints to use, in order the files are listed in the marker file,
+    /// for the ejson files linked to this source.
+    ///
+    /// If a file fails to return its metadata for any reason (eg. the file was deleted),
+    /// the fingerprint is skipped.
+    fn ejson_fingerprints(&self) -> Vec<String> {
+        self.ejson_file_paths
+            .iter()
+            .filter_map(|path| {
+                let metadata = std::fs::metadata(path).ok()?;
+                let modified = metadata.modified().ok()?;
+                let modified = modified.elapsed().ok()?.as_nanos();
+
+                Some(format!("{}:{}", path.to_str()?, modified))
+            })
+            .collect()
     }
 }
 
@@ -205,6 +248,7 @@ mod tests {
             Source {
                 dir: Arbitrary::arbitrary(g),
                 files: Arbitrary::arbitrary(g),
+                ejson_file_paths: Arbitrary::arbitrary(g),
             }
         }
     }

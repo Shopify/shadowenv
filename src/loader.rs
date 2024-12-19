@@ -7,6 +7,7 @@ use std::{
 
 pub const SHADOWENV_DIR_NAME: &str = ".shadowenv.d";
 pub const SHADOWENV_PARENT_LINK_NAME: &str = "parent";
+pub const SHADOWENV_LINKED_EJSON_FILES_NAME: &str = ".ejson-files";
 
 #[derive(thiserror::Error, Debug)]
 pub enum TraversalError {
@@ -161,11 +162,15 @@ pub fn load(dirpath: PathBuf) -> Result<Option<Source>, Error> {
         if path.is_file() {
             // TODO: there HAS to be a better way to do this.
             let basename = path.file_name().unwrap().to_string_lossy().to_string();
-            if !basename.ends_with(".lisp") {
-                continue;
+
+            if basename.ends_with(".lisp") {
+                let contents = fs::read_to_string(&path)?;
+                source.add_file(basename, contents);
+            } else if basename == SHADOWENV_LINKED_EJSON_FILES_NAME {
+                source.add_ejson_links(&path)?;
             }
-            let contents = fs::read_to_string(&path)?;
-            source.add_file(basename, contents);
+
+            continue;
         }
     }
 

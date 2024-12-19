@@ -485,6 +485,7 @@ mod tests {
                 name: "file.lisp".to_string(),
                 contents: content.to_string(),
             }],
+            ejson_file_paths: vec![],
         }
     }
 
