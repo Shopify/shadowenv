@@ -212,6 +212,49 @@ impl ShadowLang {
                 })
             });
 
+        interp.scope().add_value_with_name("box/deny", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 1, name);
+
+                let value = get_value(ctx, shadowenv_name);
+                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+
+                shadowenv.borrow_mut_env().append_to_boxlist("deny", name);
+                Ok(Value::Unit)
+            })
+        });
+
+        interp.scope().add_value_with_name("box/allow-ro", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 1, name);
+
+                let value = get_value(ctx, shadowenv_name);
+                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+
+                shadowenv
+                    .borrow_mut_env()
+                    .append_to_boxlist("allow-ro", name);
+                Ok(Value::Unit)
+            })
+        });
+
+        interp.scope().add_value_with_name("box/allow-rw", |name| {
+            Value::new_foreign_fn(name, move |ctx, args| {
+                assert_args!(args, 1, name);
+
+                let value = get_value(ctx, shadowenv_name);
+                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
+                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
+
+                shadowenv
+                    .borrow_mut_env()
+                    .append_to_boxlist("allow-rw", name);
+                Ok(Value::Unit)
+            })
+        });
+
         interp.scope().add_value_with_name("provide", |name| {
             Value::new_foreign_fn(name, move |ctx, args| {
                 let value = get_value(ctx, shadowenv_name);

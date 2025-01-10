@@ -1,4 +1,4 @@
-use crate::{features::Feature, undo};
+use crate::{box_operation::BoxOperation, features::Feature, undo};
 use anyhow::Error;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -12,6 +12,8 @@ pub struct Shadowenv {
     env: HashMap<String, String>,
     /// the outer env, reconstructed by undoing $__shadowenv_data
     unshadowed_env: HashMap<String, String>,
+    // list of rules for building a box
+    shadowbox: HashSet<BoxOperation>,
     // vars that if attempted to be set will be ignored
     no_clobber: HashSet<String>,
     /// the env inherited from the calling process, untouched.
@@ -40,6 +42,7 @@ impl Shadowenv {
         Shadowenv {
             env: unshadowed_env.clone(),
             unshadowed_env,
+            shadowbox: HashSet::new(),
             no_clobber,
             initial_env: env,
             lists: HashSet::new(),
@@ -177,6 +180,11 @@ impl Shadowenv {
     pub fn prepend_to_pathlist(&mut self, a: &str, b: &str) {
         self.inform_list(a);
         env_prepend_to_pathlist(&mut self.env, a.to_string(), b.to_string())
+    }
+
+    pub fn append_to_boxlist(&mut self, a: &str, b: &str) {
+        let box_entry = BoxOperation::new(a.to_string(), b.to_string());
+        self.shadowbox.insert(box_entry);
     }
 
     pub fn add_feature(&mut self, name: &str, version: Option<&str>) {
