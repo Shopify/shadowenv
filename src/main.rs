@@ -1,3 +1,4 @@
+mod r#box;
 mod cli;
 mod diff;
 mod exec_cmd;
@@ -21,6 +22,7 @@ fn main() {
     use cli::ShadowenvApp::*;
 
     let result = match cli::ShadowenvApp::parse() {
+        Box(cmd) => r#box::run(cmd),
         Diff(cmd) => Ok(diff::run(cmd)),
         Exec(cmd) => exec_cmd::run(cmd),
         Hook(cmd) => hook::run(cmd),

@@ -4,6 +4,7 @@ use clap::{Args, Parser, Subcommand};
 #[clap(about, version)]
 #[command(propagate_version = true)]
 pub enum ShadowenvApp {
+    Box(BoxCmd),
     Diff(DiffCmd),
     Exec(ExecCmd),
     Hook(HookCmd),
@@ -11,6 +12,21 @@ pub enum ShadowenvApp {
     Init(InitCmd),
     Trust(TrustCmd),
     PromptWidget(PromptWidgetCmd),
+}
+
+/// Execute a command inside a box
+#[derive(clap::Args, Debug)]
+pub struct BoxCmd {
+    /// Instead of searching from the current directory for a .shadowenv.d, search from this one.
+    #[arg(long)]
+    pub dir: Option<String>,
+
+    /// The command to execute.
+    pub cmd: String,
+
+    /// The arguments to the command, if any.
+    #[arg(last = true)]
+    pub cmd_argv: Vec<String>,
 }
 
 /// Execute a command after loading the environment from the current directory.

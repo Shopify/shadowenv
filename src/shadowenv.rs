@@ -190,7 +190,7 @@ impl Shadowenv {
         self.box_operations.insert((a.to_string(), b.to_string()));
     }
 
-    pub fn operations(&self) -> HashSet<(String, String)> {
+    pub fn operations(&self) -> BTreeSet<(String, String)> {
         self.box_operations.iter().cloned().collect()
     }
 

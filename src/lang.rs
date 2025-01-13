@@ -6,6 +6,7 @@ use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
     cell::{Ref, RefCell},
+    collections::BTreeSet,
     env, fs,
     path::{Path, PathBuf},
     rc::Rc,
@@ -458,7 +459,7 @@ mod tests {
         let shadowenv =
             ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
                 .unwrap();
-        let expected = HashSet::from([
+        let expected = BTreeSet::from([
             (String::from("deny"), String::from("/foo")),
             (String::from("allow-ro"), String::from("/foo/bar")),
             (String::from("allow-rw"), String::from("/foo/baz")),
