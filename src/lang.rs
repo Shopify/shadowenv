@@ -220,7 +220,7 @@ impl ShadowLang {
                 let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                shadowenv.borrow_mut_env().append_to_boxlist("deny", name);
+                shadowenv.borrow_mut_env().add_operation("deny", name);
                 Ok(Value::Unit)
             })
         });
@@ -233,9 +233,7 @@ impl ShadowLang {
                 let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                shadowenv
-                    .borrow_mut_env()
-                    .append_to_boxlist("allow-ro", name);
+                shadowenv.borrow_mut_env().add_operation("allow-ro", name);
                 Ok(Value::Unit)
             })
         });
@@ -248,9 +246,7 @@ impl ShadowLang {
                 let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
 
-                shadowenv
-                    .borrow_mut_env()
-                    .append_to_boxlist("allow-rw", name);
+                shadowenv.borrow_mut_env().add_operation("allow-rw", name);
                 Ok(Value::Unit)
             })
         });
@@ -445,6 +441,29 @@ mod tests {
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["PATH"].as_ref().unwrap(), "/something_else");
+    }
+
+    #[test]
+    fn test_box() {
+        let shadowenv = build_shadow_env(vec![]);
+
+        let source = build_source(
+            r#"
+                (box/deny "/foo")
+                (box/allow-ro "/foo/bar")
+                (box/allow-rw "/foo/baz")
+            "#,
+        );
+
+        let shadowenv =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
+                .unwrap();
+        let expected = HashSet::from([
+            (String::from("deny"), String::from("/foo")),
+            (String::from("allow-ro"), String::from("/foo/bar")),
+            (String::from("allow-rw"), String::from("/foo/baz")),
+        ]);
+        assert_eq!(shadowenv.operations(), expected);
     }
 
     #[test]

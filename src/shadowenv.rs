@@ -1,7 +1,7 @@
-use crate::{box_operation::BoxOperation, features::Feature, undo};
+use crate::{features::Feature, undo};
 use anyhow::Error;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     env,
     path::PathBuf,
 };
@@ -12,8 +12,8 @@ pub struct Shadowenv {
     env: HashMap<String, String>,
     /// the outer env, reconstructed by undoing $__shadowenv_data
     unshadowed_env: HashMap<String, String>,
-    // list of rules for building a box
-    shadowbox: HashSet<BoxOperation>,
+    // list of operations for building a box
+    box_operations: BTreeSet<(String, String)>,
     // vars that if attempted to be set will be ignored
     no_clobber: HashSet<String>,
     /// the env inherited from the calling process, untouched.
@@ -42,7 +42,7 @@ impl Shadowenv {
         Shadowenv {
             env: unshadowed_env.clone(),
             unshadowed_env,
-            shadowbox: HashSet::new(),
+            box_operations: BTreeSet::new(),
             no_clobber,
             initial_env: env,
             lists: HashSet::new(),
@@ -123,6 +123,10 @@ impl Shadowenv {
         }
         data.prev_dirs = self.current_dirs.clone();
 
+        for (operation, path) in self.box_operations.iter() {
+            data.add_box_operation(operation.clone(), path.to_string());
+        }
+
         data
     }
 
@@ -182,9 +186,12 @@ impl Shadowenv {
         env_prepend_to_pathlist(&mut self.env, a.to_string(), b.to_string())
     }
 
-    pub fn append_to_boxlist(&mut self, a: &str, b: &str) {
-        let box_entry = BoxOperation::new(a.to_string(), b.to_string());
-        self.shadowbox.insert(box_entry);
+    pub fn add_operation(&mut self, a: &str, b: &str) {
+        self.box_operations.insert((a.to_string(), b.to_string()));
+    }
+
+    pub fn operations(&self) -> HashSet<(String, String)> {
+        self.box_operations.iter().cloned().collect()
     }
 
     pub fn add_feature(&mut self, name: &str, version: Option<&str>) {
@@ -372,6 +379,9 @@ mod tests {
         shadowenv.set("VAR_B", None);
         shadowenv.set("VAR_C", Some("v3"));
 
+        shadowenv.add_operation("BOX_OPERATION_A", "/path1");
+        shadowenv.add_operation("BOX_OPERATION_B", "/path2/path3");
+
         let expected = Data {
             scalars: vec![
                 Scalar {
@@ -398,10 +408,14 @@ mod tests {
                 additions: vec!["/path4".to_string(), "/path3".to_string()],
                 deletions: vec!["/path1".to_string()],
             }],
+            r#box: vec![
+                vec!["BOX_OPERATION_A".to_string(), "/path1".to_string()],
+                vec!["BOX_OPERATION_B".to_string(), "/path2/path3".to_string()],
+            ],
             prev_dirs: Default::default(),
         };
 
-        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}],"prev_dirs":[]}"#;
+        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}],"box":[["BOX_OPERATION_A","/path1"],["BOX_OPERATION_B","/path2/path3"]],"prev_dirs":[]}"#;
 
         assert_eq!(shadowenv.shadowenv_data(), expected);
 

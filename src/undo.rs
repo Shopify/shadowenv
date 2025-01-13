@@ -31,6 +31,8 @@ pub struct Data {
     #[serde(default)]
     pub lists: Vec<List>,
     #[serde(default)]
+    pub r#box: Vec<Vec<String>>,
+    #[serde(default)]
     pub prev_dirs: HashSet<PathBuf>,
 }
 
@@ -44,6 +46,7 @@ impl Data {
         Data {
             scalars: vec![],
             lists: vec![],
+            r#box: vec![],
             prev_dirs: HashSet::new(),
         }
     }
@@ -69,5 +72,9 @@ impl Data {
             additions,
             deletions,
         })
+    }
+
+    pub fn add_box_operation(&mut self, operation: String, path: String) {
+        self.r#box.push(vec![operation, path])
     }
 }
