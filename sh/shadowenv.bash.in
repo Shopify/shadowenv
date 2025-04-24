@@ -11,8 +11,6 @@ __shadowenv_hook() {
   # meaning we need a subshell, so we can't just let shadowenv look up its ppid.
   eval "$("@SELF@" hook "${flags[@]}")"
 }
-
 @HOOKBOOK@
-
 __shadowenv_force_run=1
 hookbook_add_hook __shadowenv_hook

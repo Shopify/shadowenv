@@ -92,13 +92,21 @@ pub struct TrustCmd {}
 #[clap(disable_help_subcommand = true)]
 pub enum InitCmd {
     /// Prints a script which can be eval'd by bash to set up shadowenv.
-    Bash,
+    Bash(InitOptions),
 
     /// Prints a script which can be eval'd by zsh to set up shadowenv.
-    Zsh,
+    Zsh(InitOptions),
 
     /// Prints a script which can be eval'd by fish to set up shadowenv.
     Fish,
+}
+
+/// Options shared by all init subcommands
+#[derive(Args, Debug)]
+pub struct InitOptions {
+    /// Don't print hookbook inline (it's still required -- only use if you've already loaded it)
+    #[arg(long)]
+    pub no_hookbook: bool,
 }
 
 /// Print a little glyph you can include in a shell prompt to indicate that shadowenv is active.
