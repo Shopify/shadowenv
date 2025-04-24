@@ -9,8 +9,6 @@ __shadowenv_hook() {
   fi
   "@SELF@" hook "${flags[@]}" | source /dev/stdin
 }
-
 @HOOKBOOK@
-
 __shadowenv_force_run=1
 hookbook_add_hook __shadowenv_hook
