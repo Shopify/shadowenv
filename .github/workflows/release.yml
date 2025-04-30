@@ -21,14 +21,14 @@ jobs:
           os: ubuntu-latest
           arch: amd64
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
+    - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
       with:
         toolchain: stable
         components: rustfmt, clippy
         target: ${{ matrix.target }}
         override: true
-    - uses: actions-rs/cargo@v1
+    - uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
       with:
         command: build
         args: --release --target ${{ matrix.target }}
