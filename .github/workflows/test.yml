@@ -26,8 +26,8 @@ jobs:
         - os: ubuntu-latest
           target: aarch64-apple-darwin
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
+    - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
       with:
         toolchain: ${{ matrix.toolchain }}
         components: rustfmt, clippy
