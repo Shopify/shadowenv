@@ -34,8 +34,10 @@ impl Shadowenv {
         env: HashMap<String, String>,
         shadowenv_data: undo::Data,
         target_hash: u64,
+        clobber: bool,
     ) -> Shadowenv {
-        let (unshadowed_env, no_clobber, prev_dirs) = Shadowenv::unshadow(&env, shadowenv_data);
+        let (unshadowed_env, no_clobber, prev_dirs) =
+            Shadowenv::unshadow(&env, shadowenv_data, clobber);
 
         Shadowenv {
             env: unshadowed_env.clone(),
@@ -53,11 +55,12 @@ impl Shadowenv {
     fn unshadow(
         env: &HashMap<String, String>,
         shadowenv_data: undo::Data,
+        clobber: bool,
     ) -> (HashMap<String, String>, HashSet<String>, HashSet<PathBuf>) {
         let mut result = env.clone();
         let mut no_clobber = HashSet::new();
         for scalar in shadowenv_data.scalars {
-            if scalar.no_clobber {
+            if !clobber && scalar.no_clobber {
                 no_clobber.insert(scalar.name);
                 continue;
             }
@@ -65,7 +68,7 @@ impl Shadowenv {
             let current_value = env_get(&result, scalar.name.clone());
             if current_value == scalar.current {
                 env_set(&mut result, scalar.name, scalar.original);
-            } else {
+            } else if !clobber {
                 no_clobber.insert(scalar.name);
             }
         }
@@ -329,7 +332,7 @@ mod tests {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect::<HashMap<_, _>>();
-        Shadowenv::new(env, data, 123456789)
+        Shadowenv::new(env, data, 123456789, false)
     }
 
     #[test]
