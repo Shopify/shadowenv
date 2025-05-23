@@ -180,8 +180,8 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
         VariableOutputMode::Posix => {
             for (k, v) in shadowenv.exports()? {
                 match v {
-                    Some(s) => println!("export {}={}", k, shell_escape(&s)),
-                    None => println!("unset {}", k),
+                    Some(s) => println!("export {}={}", shell_escape(&k), shell_escape(&s)),
+                    None => println!("unset {}", shell_escape(&k)),
                 }
             }
             output::print_activation_to_tty(
@@ -196,13 +196,13 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                     Some(s) => {
                         if k == "PATH" {
                             let pathlist = shell_escape(&s).replace(":", "' '");
-                            println!("set -gx {} {}", k, pathlist);
+                            println!("set -gx {} {}", shell_escape(&k), pathlist);
                         } else {
-                            println!("set -gx {} {}", k, shell_escape(&s));
+                            println!("set -gx {} {}", shell_escape(&k), shell_escape(&s));
                         }
                     }
                     None => {
-                        println!("set -e {}", k);
+                        println!("set -e {}", shell_escape(&k));
                     }
                 }
             }
@@ -245,8 +245,10 @@ fn shell_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::undo::Data;
     use std::fs;
     use tempfile::tempdir;
+
     #[test]
     fn load_trusted_source_returns_an_error_for_untrusted_folders() {
         let temp_dir = tempdir().unwrap();
@@ -296,5 +298,85 @@ mod tests {
         // So the outermost env must come first, with the innermost dir coming last.
         assert!(sources[0].dir.ends_with("dir1"));
         assert!(sources[1].dir.ends_with("dir1/dir2"));
+    }
+
+    #[test]
+    fn test_apply_env_escapes_variable_names() {
+        // Test that shell_escape properly escapes dangerous characters
+        assert_eq!(shell_escape("normal_var"), "normal_var");
+        assert_eq!(
+            shell_escape("TEST=AA; touch pwned.txt; #"),
+            "'TEST=AA; touch pwned.txt; #'"
+        );
+        assert_eq!(shell_escape("VAR$(command)"), "'VAR$(command)'");
+        assert_eq!(shell_escape("VAR`command`"), "'VAR`command`'");
+        assert_eq!(shell_escape("VAR'with'quotes"), "'VAR'\\''with'\\''quotes'");
+
+        // Create a shadowenv with potentially malicious variable names as new variables
+        let initial_env = HashMap::new(); // Empty initial env
+        let mut env = initial_env.clone();
+        env.insert("NORMAL_VAR".to_string(), "normal_value".to_string());
+        env.insert(
+            "TEST=AA; touch pwned.txt; #".to_string(),
+            "value".to_string(),
+        );
+
+        let mut shadowenv = Shadowenv::new(initial_env, Data::new(), 0);
+        // Set the variables using the shadowenv API
+        shadowenv.set("NORMAL_VAR", Some("normal_value"));
+        shadowenv.set("TEST=AA; touch pwned.txt; #", Some("value"));
+
+        // Test that exports returns the expected data
+        let exports = shadowenv.exports().unwrap();
+        assert_eq!(
+            exports.get("NORMAL_VAR"),
+            Some(&Some("normal_value".to_string()))
+        );
+        assert_eq!(
+            exports.get("TEST=AA; touch pwned.txt; #"),
+            Some(&Some("value".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_shell_escape_comprehensive() {
+        // Test various shell metacharacters that could lead to command injection
+        let test_cases = vec![
+            ("simple", "simple"),
+            ("with spaces", "'with spaces'"),
+            ("with;semicolon", "'with;semicolon'"),
+            ("with|pipe", "'with|pipe'"),
+            ("with&ampersand", "'with&ampersand'"),
+            ("with>redirect", "'with>redirect'"),
+            ("with<redirect", "'with<redirect'"),
+            ("with$variable", "'with$variable'"),
+            ("with`backtick`", "'with`backtick`'"),
+            ("with$(command)", "'with$(command)'"),
+            ("with${variable}", "'with${variable}'"),
+            ("with'quote", "'with'\\''quote'"),
+            ("with\"doublequote", "'with\"doublequote'"),
+            ("with\\backslash", "'with\\backslash'"),
+            ("with\nnewline", "'with\nnewline'"),
+            ("with\ttab", "'with\ttab'"),
+            ("with#comment", "'with#comment'"),
+            ("with!history", "'with'\\!'history'"), // shell-escape also escapes !
+            ("with*glob", "'with*glob'"),
+            ("with?glob", "'with?glob'"),
+            ("with[bracket", "'with[bracket'"),
+            ("with]bracket", "'with]bracket'"),
+            ("with(paren", "'with(paren'"),
+            ("with)paren", "'with)paren'"),
+            ("with{brace", "'with{brace'"),
+            ("with}brace", "'with}brace'"),
+            ("with~tilde", "'with~tilde'"),
+            (
+                "complex; echo 'pwned' > /tmp/pwned.txt #",
+                "'complex; echo '\\''pwned'\\'' > /tmp/pwned.txt #'",
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            assert_eq!(shell_escape(input), expected, "Failed for input: {}", input);
+        }
     }
 }
