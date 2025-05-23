@@ -328,7 +328,7 @@ mod tests {
             "value".to_string(),
         );
 
-        let mut shadowenv = Shadowenv::new(initial_env, Data::new(), 0);
+        let mut shadowenv = Shadowenv::new(initial_env, Data::new(), 0, false);
         // Set the variables using the shadowenv API
         shadowenv.set("NORMAL_VAR", Some("normal_value"));
         shadowenv.set("TEST=AA; touch pwned.txt; #", Some("value"));
