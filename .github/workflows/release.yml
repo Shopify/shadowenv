@@ -33,7 +33,7 @@ jobs:
         command: build
         args: --release --target ${{ matrix.target }}
         use-cross: ${{ runner.os == 'Linux' }}
-    - uses: Shopify/upload-to-release@master
+    - uses: Shopify/upload-to-release@v2
       with:
         name: shadowenv-${{ matrix.target }}
         path: target/${{ matrix.target }}/release/shadowenv
