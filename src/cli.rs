@@ -55,6 +55,10 @@ pub struct HookCmd {
     #[arg(long)]
     pub shellpid: Option<u32>,
 
+    /// Clobber overridden environment variables when unshadowing.
+    #[arg(long)]
+    pub clobber: bool,
+
     #[command(flatten)]
     pub format: FormatOptions,
 }

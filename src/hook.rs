@@ -52,13 +52,14 @@ pub fn run(cmd: HookCmd) -> Result<(), Error> {
     };
 
     let data = Shadowenv::from_env();
-    let result = load_env(get_current_dir_or_exit(), data, cmd.force).and_then(|loaded_env| {
-        if let Some(shadowenv) = loaded_env {
-            apply_env(&shadowenv, mode)
-        } else {
-            Ok(())
-        }
-    });
+    let result =
+        load_env(get_current_dir_or_exit(), data, cmd.force, cmd.clobber).and_then(|loaded_env| {
+            if let Some(shadowenv) = loaded_env {
+                apply_env(&shadowenv, mode)
+            } else {
+                Ok(())
+            }
+        });
 
     // Reformat the error if needed.
     if let Err(err) = result {
@@ -79,6 +80,7 @@ pub fn load_env(
     pathbuf: PathBuf,
     shadowenv_data: String,
     force: bool,
+    clobber: bool,
 ) -> Result<Option<Shadowenv>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
@@ -114,7 +116,12 @@ pub fn load_env(
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(env::vars().collect(), data, targets_hash.unwrap_or(0));
+    let shadowenv = Shadowenv::new(
+        env::vars().collect(),
+        data,
+        targets_hash.unwrap_or(0),
+        clobber,
+    );
 
     match targets {
         Some(targets) => {

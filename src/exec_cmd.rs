@@ -10,7 +10,7 @@ pub fn run(cmd: ExecCmd) -> Result<(), Error> {
         .map(|d| PathBuf::from(d))
         .unwrap_or(get_current_dir_or_exit());
 
-    if let Some(shadowenv) = hook::load_env(pathbuf, data, true)? {
+    if let Some(shadowenv) = hook::load_env(pathbuf, data, true, false)? {
         hook::mutate_own_env(&shadowenv)?;
     }
 
