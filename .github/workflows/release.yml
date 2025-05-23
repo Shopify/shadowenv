@@ -22,10 +22,6 @@ jobs:
           arch: amd64
     steps:
     - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
-    # upload-to-release is busted on node 20
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-      with:
-        node-version: "18"
     - uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
       with:
         toolchain: stable
@@ -37,8 +33,9 @@ jobs:
         command: build
         args: --release --target ${{ matrix.target }}
         use-cross: ${{ runner.os == 'Linux' }}
-    - uses: Shopify/upload-to-release@master
+    - name: Rename Binary
+      run: cp ./target/${{ matrix.target }}/release/shadowenv ./shadowenv-${{ matrix.target }}
+    - name: Upload Binary to Release
+      uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
       with:
-        name: shadowenv-${{ matrix.target }}
-        path: target/${{ matrix.target }}/release/shadowenv
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        files: shadowenv-${{ matrix.target }}
