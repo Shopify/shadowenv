@@ -21,7 +21,7 @@ pub struct ExecCmd {
     pub dir: Option<String>,
 
     /// The command to execute.
-    pub cmd: String,
+    pub cmd_argv0: Option<String>,
 
     /// The arguments to the command, if any.
     #[arg(last = true)]

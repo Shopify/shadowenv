@@ -14,7 +14,13 @@ pub fn run(cmd: ExecCmd) -> Result<(), Error> {
         hook::mutate_own_env(&shadowenv)?;
     }
 
-    let argv = iter::once(cmd.cmd).chain(cmd.cmd_argv).collect::<Vec<_>>();
+    let argv = if let Some(argv0) = cmd.cmd_argv0 {
+        iter::once(argv0).chain(cmd.cmd_argv).collect::<Vec<_>>()
+    } else if !cmd.cmd_argv.is_empty() {
+        cmd.cmd_argv
+    } else {
+        return Err(anyhow::anyhow!("no command provided"));
+    };
 
     // exec only returns if it was unable to start the new process, and it's always an error.
     let err = exec::Command::new(&argv[0]).args(&argv[1..]).exec();
