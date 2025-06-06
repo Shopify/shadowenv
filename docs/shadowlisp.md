@@ -228,8 +228,8 @@ This can be especially useful in the sort of usage shown to the right.
 (expand-path "./bin") ; "/Users/you/src/project/bin"
 ```
 
-`expand-path` resolves a path to a canonicalized path, resolving any symlinks, relative references
-from the present working directory, and `~`.
+`expand-path` resolves a path to a canonicalized path, resolving relative references
+from the present working directory and `~`.
 
 | Argument | Type | Description |
 |---|---|---|
