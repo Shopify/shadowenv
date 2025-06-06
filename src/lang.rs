@@ -6,7 +6,7 @@ use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
 use std::{
     cell::{Ref, RefCell},
-    env, fs,
+    env,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -240,7 +240,7 @@ impl ShadowLang {
                 assert_args!(args, 1, name);
                 let path = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let expanded = shellexpand::tilde(path);
-                let canonicalized = match fs::canonicalize(expanded.to_string()) {
+                let absolutized = match std::path::absolute(expanded.to_string()) {
                     Ok(p) => p,
                     Err(e) => {
                         return Err(From::from(ketos::io::IoError {
@@ -251,7 +251,7 @@ impl ShadowLang {
                     }
                 };
                 Ok(<String as Into<Value>>::into(
-                    canonicalized.to_string_lossy().to_string(),
+                    absolutized.to_string_lossy().to_string(),
                 ))
             })
         });
