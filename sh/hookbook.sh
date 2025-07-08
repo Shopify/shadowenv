@@ -76,8 +76,8 @@ __hookbook_call_each() {
     __dev_null_major="$(/usr/bin/stat -f "%Hr" "/dev/null")"
     __stat_stderr='/usr/bin/stat -f "%Hr" /dev/fd/2'
   } || {
-    __dev_null_major="$(/usr/bin/stat -c "%t" /dev/null)"
-    __stat_stderr='/usr/bin/stat -c "%t" "$(readlink -f "/dev/fd/2")"'
+    __dev_null_major="$(stat -c "%t" /dev/null)"
+    __stat_stderr='stat -c "%t" "$(readlink -f "/dev/fd/2")"'
   }
   \eval "__hookbook_debug_handler() {
     [[ \"\${BASH_COMMAND}\" == \"\${PROMPT_COMMAND}\" ]] && \\return
