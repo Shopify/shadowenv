@@ -4,6 +4,7 @@ use crate::{
 };
 use ketos::{Context, Error, FromValueRef, Name, Value};
 use ketos_derive::{ForeignValue, FromValueRef};
+use path_clean::PathClean;
 use std::{
     cell::{Ref, RefCell},
     env,
@@ -76,7 +77,7 @@ fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
         |acc, v| acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()), // TODO(burke): don't unwrap
     );
 
-    Ok(res.to_string_lossy().to_string())
+    Ok(res.clean().to_string_lossy().to_string())
 }
 
 impl ShadowLang {
@@ -250,8 +251,9 @@ impl ShadowLang {
                         }));
                     }
                 };
+                let cleaned = absolutized.clean();
                 Ok(<String as Into<Value>>::into(
-                    absolutized.to_string_lossy().to_string(),
+                    cleaned.to_string_lossy().to_string(),
                 ))
             })
         });

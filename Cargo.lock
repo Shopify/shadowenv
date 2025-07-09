@@ -739,6 +739,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "path-clean"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
+
+[[package]]
 name = "phf"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1073,6 +1079,7 @@ dependencies = [
  "ketos",
  "ketos_derive",
  "libc",
+ "path-clean",
  "quickcheck",
  "quickcheck_macros",
  "rand 0.8.5",
