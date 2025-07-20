@@ -293,30 +293,32 @@ fn env_prepend_to_pathlist(env: &mut HashMap<String, String>, a: String, b: Stri
 }
 
 fn diff_vecs(oldvec: Vec<&str>, newvec: Vec<&str>) -> (Vec<String>, Vec<String>) {
-    let mut additions: Vec<String> = vec![];
-    let mut deletions: Vec<String> = vec![];
+    let mut delta: HashMap<&str, i32> = HashMap::new();
 
-    let mut oldset: HashSet<String> = HashSet::new();
-    for oldval in &oldvec {
-        oldset.insert(oldval.to_string());
+    for &item in &oldvec {
+        *delta.entry(item).or_insert(0) -= 1;
+    }
+    for &item in &newvec {
+        *delta.entry(item).or_insert(0) += 1;
     }
 
-    let mut newset: HashSet<String> = HashSet::new();
-    for newval in &newvec {
-        newset.insert(newval.to_string());
-    }
+    let mut additions = Vec::new();
+    let mut deletions = Vec::new();
 
-    for oldval in oldvec {
-        if !newset.contains(oldval) {
-            deletions.push(oldval.to_string());
+    for (&item, &count) in &delta {
+        if count > 0 {
+            for _ in 0..count {
+                additions.push(item.to_string());
+            }
+        } else if count < 0 {
+            for _ in 0..(-count) {
+                deletions.push(item.to_string());
+            }
         }
     }
 
-    for newval in newvec {
-        if !oldset.contains(newval) {
-            additions.push(newval.to_string());
-        }
-    }
+    additions.sort();
+    deletions.sort();
 
     (additions, deletions)
 }
@@ -390,13 +392,13 @@ mod tests {
             ],
             lists: vec![List {
                 name: "PATH".to_string(),
-                additions: vec!["/path4".to_string(), "/path3".to_string()],
+                additions: vec!["/path3".to_string(), "/path4".to_string()],
                 deletions: vec!["/path1".to_string()],
             }],
             prev_dirs: Default::default(),
         };
 
-        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path4","/path3"],"deletions":["/path1"]}],"prev_dirs":[]}"#;
+        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path3","/path4"],"deletions":["/path1"]}],"prev_dirs":[]}"#;
 
         assert_eq!(shadowenv.shadowenv_data(), expected);
 
