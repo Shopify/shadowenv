@@ -1,6 +1,6 @@
 .TH SHADOWENV 1
 .SH NAME
-shadowenv \- maninpulate environment variables as you change directories
+shadowenv \- manipulate environment variables as you change directories
 .SH SYNOPSIS
 \fBshadowenv\fR [\fB\-h\fR|\fB\-V\fR] \fIsubcommand\fR
 .SH DESCRIPTION
@@ -26,11 +26,11 @@ Instead of searching from the current directory for a .shadowenv.d, search from 
 
 .TP
 \fBchild-argv0\fR
-If the command doesn't need arguments, it can be passed directly as the last arugment.
+If the command doesn't need arguments, it can be passed directly as the last argument.
 
 .TP
 \fBchild-argv...\fR
-If the command requires arguments, they must all be passed after a '--'.
+If the command requires arguments, the command and all arguments must be passed after a '--'.
 
 .SS \fBhook\fR [FLAGS] [OPTIONS]
 Runs the shell hook. You shouldn't need to run this manually; instead, source the output of \fBshadowenv init\fR to create the shell hooks that will use this command.
