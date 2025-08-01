@@ -20,10 +20,10 @@ pub struct ExecCmd {
     #[arg(long)]
     pub dir: Option<String>,
 
-    /// The command to execute.
+    /// The command to execute if there are no arguments.
     pub cmd_argv0: Option<String>,
 
-    /// The arguments to the command, if any.
+    /// The command and arguments if it has any.
     #[arg(last = true)]
     pub cmd_argv: Vec<String>,
 }
