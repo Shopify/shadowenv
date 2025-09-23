@@ -135,7 +135,7 @@ pub fn load_env(
             }
         }
         // note the "false" since we didn't have anything to run
-        None => Ok(Some(shadowenv)),
+        None => Ok(None),
     }
 }
 
