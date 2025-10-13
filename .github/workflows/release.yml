@@ -36,6 +36,6 @@ jobs:
     - name: Rename Binary
       run: cp ./target/${{ matrix.target }}/release/shadowenv ./shadowenv-${{ matrix.target }}
     - name: Upload Binary to Release
-      uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2.2.2
+      uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
       with:
         files: shadowenv-${{ matrix.target }}
