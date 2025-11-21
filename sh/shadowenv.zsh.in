@@ -1,6 +1,6 @@
 __shadowenv_hook() {
   local flags; flags=()
-  if [[ "$1" == "zsh-preexec" ]]; then
+  if [[ "$1" == "preexec" ]]; then
     flags=(--silent)
   fi
   if [[ -n $__shadowenv_force_run ]]; then
