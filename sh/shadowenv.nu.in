@@ -1,0 +1,43 @@
+def --env __shadowenv_hook [] {
+  mut flags = [--nushell]
+  if ($env.__shadowenv_force_run? | default false) {
+    $flags = [...$flags --force]
+    hide-env __shadowenv_force_run
+  }
+  # Get shadowenv changes as JSON (we can't use `source` dynamically in Nushell)
+  let data = (^@SELF@ hook ...$flags | complete)
+  if $data.exit_code != 0 {
+    return
+  }
+
+  let changes = ($data.stdout | from json)
+
+  # Print activation message if present
+  if $changes.message? != null {
+    print -e $changes.message
+  }
+
+  # Apply environment changes if exported field exists
+  # exported contains vars to set (value) or unset (null)
+  if $changes.exported? != null {
+    for entry in ($changes.exported | transpose key value) {
+      if $entry.value == null {
+        hide-env $entry.key
+      } else if $entry.key == "PATH" {
+        # Convert colon-separated string to list for Nushell's PATH
+        let separator = (if $nu.os-info.name == "windows" { ";" } else { ":" })
+        $env.PATH = ($entry.value | split row $separator)
+      } else {
+        load-env {($entry.key): $entry.value}
+      }
+    }
+  }
+}
+
+$env.config = ($env.config | upsert hooks {|config|
+  $config.hooks | upsert pre_prompt {|hooks|
+    $hooks.pre_prompt | append {|| __shadowenv_hook }
+  }
+})
+
+$env.__shadowenv_force_run = true

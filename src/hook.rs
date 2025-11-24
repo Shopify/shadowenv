@@ -15,6 +15,7 @@ use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result,
 
 pub enum VariableOutputMode {
     Fish,
+    Nushell,
     Porcelain,
     Posix,
     Json,
@@ -26,6 +27,8 @@ struct Modifications {
     schema: String,
     exported: HashMap<String, Option<String>>,
     unexported: HashMap<String, Option<String>>, // Legacy. Not used, just shows up empty in json
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
 }
 
 impl Modifications {
@@ -34,7 +37,13 @@ impl Modifications {
             schema: "v2".to_string(),
             exported: exports,
             unexported: HashMap::new(),
+            message: None,
         }
+    }
+
+    fn with_message(mut self, message: Option<String>) -> Modifications {
+        self.message = message;
+        self
     }
 }
 
@@ -43,6 +52,8 @@ pub fn run(cmd: HookCmd) -> Result<(), Error> {
         VariableOutputMode::Porcelain
     } else if cmd.format.fish {
         VariableOutputMode::Fish
+    } else if cmd.format.nushell {
+        VariableOutputMode::Nushell
     } else if cmd.format.json {
         VariableOutputMode::Json
     } else if cmd.format.pretty_json {
@@ -219,6 +230,17 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                 shadowenv.features(),
             );
         }
+        VariableOutputMode::Nushell => {
+            // Nushell mode outputs JSON with an activation message
+            // (Nushell can't eval dynamic code like bash, so we use JSON)
+            let message = output::format_activation_message(
+                shadowenv.current_dirs(),
+                shadowenv.prev_dirs(),
+                shadowenv.features(),
+            );
+            let modifs = Modifications::new(shadowenv.exports()?).with_message(message);
+            println!("{}", serde_json::to_string(&modifs).unwrap());
+        }
         VariableOutputMode::Porcelain => {
             // three fields: <operation> : <name> : <value>
             // opcodes: 1: set, unexported (unused)
@@ -386,4 +408,5 @@ mod tests {
             assert_eq!(shell_escape(input), expected, "Failed for input: {}", input);
         }
     }
+
 }

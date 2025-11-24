@@ -78,6 +78,10 @@ pub struct FormatOptions {
     #[arg(long)]
     pub fish: bool,
 
+    /// Format variable assignments for nushell.
+    #[arg(long)]
+    pub nushell: bool,
+
     /// Format variable assignments as JSON.
     #[arg(long)]
     pub json: bool,
@@ -103,6 +107,9 @@ pub enum InitCmd {
 
     /// Prints a script which can be eval'd by fish to set up shadowenv.
     Fish,
+
+    /// Prints a script which can be sourced by nushell to set up shadowenv.
+    Nushell,
 }
 
 /// Options shared by all init subcommands
