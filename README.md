@@ -6,13 +6,22 @@ some limited ability to make the manipulations dynamic.
 
 ![shadowenv in action](https://burkelibbey.s3.amazonaws.com/shadowenv.gif)
 
-In order to use shadowenv, add a line to your shell profile (`.zshrc`, `.bash_profile`, or
-`config.fish`) reading:
+In order to use shadowenv, add initialization to your shell profile:
 
 ```bash
-eval "$(shadowenv init bash)" # for bash
-eval "$(shadowenv init zsh)"  # for zsh
-shadowenv init fish | source  # for fish
+# For bash (.bash_profile)
+eval "$(shadowenv init bash)"
+
+# For zsh (.zshrc)
+eval "$(shadowenv init zsh)"
+
+# For fish (config.fish)
+shadowenv init fish | source
+
+# For nushell - first, generate the initialization script (run this in your terminal):
+shadowenv init nushell | save -f ~/.shadowenv.nu
+# Then add this line to the end of your config file (find it by running $nu.config-path):
+source ~/.shadowenv.nu
 ```
 
 With this code loaded, upon entering a directory containing a `.shadowenv.d` directory,

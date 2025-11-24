@@ -33,16 +33,18 @@ pub fn format_hook_error(err: Error, shellpid: u32, silent: bool) -> Option<Stri
     Some(format!("{} \x1b[1;31mfailure: {}\x1b[0m", SHADOWENV, err))
 }
 
-pub fn print_activation_to_tty(
+pub fn format_activation_message(
     current_dirs: HashSet<PathBuf>,
     prev_dirs: HashSet<PathBuf>,
     features: HashSet<Feature>,
-) {
-    if !should_print_activation() {
-        return;
-    }
+) -> Option<String> {
     let added_dirs: HashSet<PathBuf> = current_dirs.difference(&prev_dirs).cloned().collect();
     let removed_dirs: HashSet<PathBuf> = prev_dirs.difference(&current_dirs).cloned().collect();
+
+    // Don't print message if nothing changed
+    if added_dirs.is_empty() && removed_dirs.is_empty() && features.is_empty() {
+        return None;
+    }
 
     let feature_list = if !features.is_empty() {
         format!(
@@ -57,12 +59,25 @@ pub fn print_activation_to_tty(
         String::new()
     };
 
-    eprintln!(
+    Some(format!(
         "\x1b[1;34m{}{}{}\x1b[0m",
         SHADOWENV,
         dir_diff(added_dirs, removed_dirs).unwrap_or_default(),
         feature_list
-    );
+    ))
+}
+
+pub fn print_activation_to_tty(
+    current_dirs: HashSet<PathBuf>,
+    prev_dirs: HashSet<PathBuf>,
+    features: HashSet<Feature>,
+) {
+    if !should_print_activation() {
+        return;
+    }
+    if let Some(message) = format_activation_message(current_dirs, prev_dirs, features) {
+        eprintln!("{}", message);
+    }
 }
 
 fn dir_diff(added_dirs: HashSet<PathBuf>, removed_dirs: HashSet<PathBuf>) -> Option<String> {

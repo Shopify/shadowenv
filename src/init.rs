@@ -21,6 +21,11 @@ pub fn run(cmd: InitCmd) {
             include_bytes!("../sh/shadowenv.fish.in"),
             true, // Fish doesn't use hookbook
         ),
+        Nushell => print_script(
+            pb,
+            include_bytes!("../sh/shadowenv.nu.in"),
+            true, // Nushell doesn't use hookbook
+        ),
     };
 }
 
