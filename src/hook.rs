@@ -15,6 +15,7 @@ use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result,
 
 pub enum VariableOutputMode {
     Fish,
+    Nushell,
     Porcelain,
     Posix,
     Json,
@@ -43,6 +44,8 @@ pub fn run(cmd: HookCmd) -> Result<(), Error> {
         VariableOutputMode::Porcelain
     } else if cmd.format.fish {
         VariableOutputMode::Fish
+    } else if cmd.format.nushell {
+        VariableOutputMode::Nushell
     } else if cmd.format.json {
         VariableOutputMode::Json
     } else if cmd.format.pretty_json {
@@ -219,6 +222,33 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                 shadowenv.features(),
             );
         }
+        VariableOutputMode::Nushell => {
+            for (k, v) in shadowenv.exports()? {
+                match v {
+                    Some(s) => {
+                        if k == "PATH" {
+                            let paths: Vec<&str> = s.split(':').collect();
+                            let pathlist = paths
+                                .iter()
+                                .map(|p| nushell_escape(p))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            println!("$env.{} = [{}]", k, pathlist);
+                        } else {
+                            println!("$env.{} = {}", k, nushell_escape(&s));
+                        }
+                    }
+                    None => {
+                        println!("hide-env {}", k);
+                    }
+                }
+            }
+            output::print_activation_to_tty(
+                shadowenv.current_dirs(),
+                shadowenv.prev_dirs(),
+                shadowenv.features(),
+            );
+        }
         VariableOutputMode::Porcelain => {
             // three fields: <operation> : <name> : <value>
             // opcodes: 1: set, unexported (unused)
@@ -247,6 +277,24 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
 
 fn shell_escape(s: &str) -> String {
     shell::escape(Cow::from(s)).to_string()
+}
+
+fn nushell_escape(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() + 2);
+    result.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => result.push_str("\\\""),
+            '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            '$' => result.push_str("\\$"),
+            _ => result.push(c),
+        }
+    }
+    result.push('"');
+    result
 }
 
 #[cfg(test)]
