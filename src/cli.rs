@@ -78,10 +78,6 @@ pub struct FormatOptions {
     #[arg(long)]
     pub fish: bool,
 
-    /// Format variable assignments for nushell.
-    #[arg(long)]
-    pub nushell: bool,
-
     /// Format variable assignments as JSON.
     #[arg(long)]
     pub json: bool,
