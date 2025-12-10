@@ -1,0 +1,20 @@
+$env.config = ($env.config | upsert hooks.env_change.PWD { |config|
+  let existing = $config | get -o hooks.env_change.PWD | default []
+  $existing | append {||
+     mut flags = ["--json"]
+
+     if ($env.__shadowenv_force_run? | default false) {
+      hide-env -i __shadowenv_force_run
+      $flags = ($flags | append "--force")
+    }
+
+    let result = @SELF@ hook ...$flags | complete
+    if $result.exit_code != 0 {
+      return
+    }
+
+    $result.stdout | from json | get -o exported | default {} | load-env
+  }
+})
+
+$env.__shadowenv_force_run = true

@@ -103,6 +103,9 @@ pub enum InitCmd {
 
     /// Prints a script which can be eval'd by fish to set up shadowenv.
     Fish,
+
+    /// Prints a script which can be eval'd by nushell to set up shadowenv.
+    Nushell,
 }
 
 /// Options shared by all init subcommands
