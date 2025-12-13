@@ -97,9 +97,9 @@ impl ShadowLang {
         // "Maximum size of value stack, in values"
         // This also puts a cap on the size of string literals in a single function invocation.
         // The default limit of 256 then means a limit of 256 bytes of string per invocation.
-        // We'll increase this to 8k, in case people want to embed an RSA cert or something (don't
+        // We'll increase this to 64k, in case people want to embed an RSA cert or something (don't
         // construe this as an endorsement of that plan).
-        restrictions.memory_limit = 8192;
+        restrictions.memory_limit = 65536;
 
         let interp = ketos::Builder::new()
             .restrict(restrictions)
@@ -112,6 +112,18 @@ impl ShadowLang {
         interp
             .scope()
             .add_constant(shadowenv_name, Value::Foreign(rc_wrapper.clone()));
+
+        let system_os_name = interp.scope().add_name("system/os");
+        interp.scope().add_constant(
+            system_os_name,
+            <String as Into<Value>>::into(std::env::consts::OS.to_string()),
+        );
+
+        let system_arch_name = interp.scope().add_name("system/arch");
+        interp.scope().add_constant(
+            system_arch_name,
+            <String as Into<Value>>::into(std::env::consts::ARCH.to_string()),
+        );
 
         ketos_fn2! { interp.scope() => "path-concat" =>
         fn path_concat(...) -> String }
