@@ -281,7 +281,7 @@ impl ShadowLang {
 
         for source_file in &files {
             let fname = format!("__shadowenv__{}", source_file.name);
-            let prog = format!("(define ({} env) (do {}))", fname, source_file.contents);
+            let prog = format!("(define ({} env) (do () {}))", fname, source_file.contents);
 
             // TODO: error type?
             if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
@@ -351,6 +351,27 @@ mod tests {
 
         let result =
             ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
+        let env = result.unwrap().exports().unwrap();
+
+        assert_eq!(env["VAL_A"].as_ref().unwrap(), "42");
+    }
+
+    #[test]
+    fn test_empty_source() {
+        let shadowenv = build_shadow_env(vec![]);
+
+        let empty_source = build_source(
+            r#""#,
+        );
+
+        let other_source = build_source(
+            r#"
+            (env/set "VAL_A" "42")
+            "#,
+        );
+
+        let result =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![empty_source, other_source]));
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["VAL_A"].as_ref().unwrap(), "42");
