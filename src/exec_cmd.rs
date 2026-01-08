@@ -7,7 +7,7 @@ pub fn run(cmd: ExecCmd) -> Result<(), Error> {
     let data = Shadowenv::from_env();
     let pathbuf = cmd
         .dir
-        .map(|d| PathBuf::from(d))
+        .map(PathBuf::from)
         .unwrap_or(get_current_dir_or_exit());
 
     if let Some(shadowenv) = hook::load_env(pathbuf, data, true, false)? {

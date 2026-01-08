@@ -1,9 +1,12 @@
 use crate::cli::InitCmd::{self, *};
+use anyhow::{anyhow, Context, Result};
+use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
-pub fn run(cmd: InitCmd) {
+pub fn run(cmd: InitCmd) -> Result<()> {
     let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
     match cmd {
         Bash(opts) => print_script(
@@ -21,15 +24,47 @@ pub fn run(cmd: InitCmd) {
             include_bytes!("../sh/shadowenv.fish.in"),
             true, // Fish doesn't use hookbook
         ),
-        Nushell => print_script(
-            pb,
-            include_bytes!("../sh/shadowenv.nushell.in"),
-            true, // Nushell doesn't use hookbook
-        ),
-    };
+        Nushell => install_nushell_hook(pb),
+    }
 }
 
-fn print_script(selfpath: PathBuf, bytes: &[u8], no_hookbook: bool) -> i32 {
+fn install_nushell_hook(selfpath: PathBuf) -> Result<()> {
+    let output = Command::new("nu")
+        .args(["-c", "$nu.user-autoload-dirs | first"])
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                anyhow!("Could not find 'nu' in PATH. Please ensure nushell is installed.")
+            } else {
+                anyhow!("Failed to run 'nu': {}", e)
+            }
+        })?;
+
+    if !output.status.success() {
+        return Err(anyhow!(
+            "Failed to query nushell autoload directory: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let autoload_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let autoload_path = PathBuf::from(&autoload_dir);
+
+    fs::create_dir_all(&autoload_path)
+        .with_context(|| format!("Failed to create autoload directory '{}'", autoload_dir))?;
+
+    let script_path = autoload_path.join("shadowenv.nu");
+    let script = String::from_utf8_lossy(include_bytes!("../sh/shadowenv.nushell.in"));
+    let script = script.replace("@SELF@", selfpath.to_str().unwrap());
+
+    fs::write(&script_path, script.as_bytes())
+        .with_context(|| format!("Failed to write '{}'", script_path.display()))?;
+
+    println!("Wrote shadowenv hook to {}", script_path.display());
+    Ok(())
+}
+
+fn print_script(selfpath: PathBuf, bytes: &[u8], no_hookbook: bool) -> Result<()> {
     let script = String::from_utf8_lossy(bytes);
     let script = script.replace("@SELF@", selfpath.into_os_string().to_str().unwrap());
 
@@ -44,5 +79,5 @@ fn print_script(selfpath: PathBuf, bytes: &[u8], no_hookbook: bool) -> i32 {
         let script = script.replace("@HOOKBOOK@", &padded_hookbook);
         println!("{}", script);
     }
-    0
+    Ok(())
 }

@@ -21,12 +21,18 @@ fn main() {
     use cli::ShadowenvApp::*;
 
     let result = match cli::ShadowenvApp::parse() {
-        Diff(cmd) => Ok(diff::run(cmd)),
+        Diff(cmd) => {
+            diff::run(cmd);
+            Ok(())
+        }
         Exec(cmd) => exec_cmd::run(cmd),
         Hook(cmd) => hook::run(cmd),
-        Init(cmd) => Ok(init::run(cmd)),
+        Init(cmd) => init::run(cmd),
         Trust(_) => trust::run(),
-        PromptWidget(_) => Ok(prompt_widget::run()),
+        PromptWidget(_) => {
+            prompt_widget::run();
+            Ok(())
+        }
     };
 
     if let Err(err) = result {
