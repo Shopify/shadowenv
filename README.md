@@ -7,14 +7,15 @@ some limited ability to make the manipulations dynamic.
 ![shadowenv in action](https://burkelibbey.s3.amazonaws.com/shadowenv.gif)
 
 In order to use shadowenv, add a line to your shell profile (`.zshrc`, `.bash_profile`,
-`config.fish`, or `config.nu`) reading:
+or `config.fish`) reading:
 
 ```bash
 eval "$(shadowenv init bash)" # for bash
 eval "$(shadowenv init zsh)"  # for zsh
 shadowenv init fish | source  # for fish
-# for nushell, paste the output of `shadowenv init nushell` into config.nu
 ```
+
+For nushell, run `shadowenv init nushell` which will install a hook into nushell's autoload directory.
 
 With this code loaded, upon entering a directory containing a `.shadowenv.d` directory,
 any `*.lisp` files in that directory will be executed and you will see "activated shadowenv." in your

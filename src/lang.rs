@@ -53,7 +53,7 @@ impl ShadowenvWrapper {
     fn new(shadowenv: Shadowenv) -> Self {
         Self(RefCell::new(shadowenv))
     }
-    fn borrow_mut_env(&self) -> std::cell::RefMut<Shadowenv> {
+    fn borrow_mut_env(&self) -> std::cell::RefMut<'_, Shadowenv> {
         self.0.borrow_mut()
     }
     fn borrow_env(&self) -> Ref<'_, Shadowenv> {
