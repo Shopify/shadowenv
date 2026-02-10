@@ -99,7 +99,7 @@ impl ShadowLang {
         // The default limit of 256 then means a limit of 256 bytes of string per invocation.
         // We'll increase this to 8k, in case people want to embed an RSA cert or something (don't
         // construe this as an endorsement of that plan).
-        restrictions.memory_limit = 8192;
+        restrictions.memory_limit = 65536;
 
         let interp = ketos::Builder::new()
             .restrict(restrictions)
