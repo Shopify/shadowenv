@@ -7,7 +7,7 @@ __shadowenv_hook() {
     flags+=(--force)
     unset __shadowenv_force_run
   fi
-  "@SELF@" hook "${flags[@]}" | source /dev/stdin
+  shadowenv hook "${flags[@]}" | source /dev/stdin
 }
 @HOOKBOOK@
 __shadowenv_force_run=1

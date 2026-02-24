@@ -7,28 +7,15 @@ use std::process::Command;
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
 pub fn run(cmd: InitCmd) -> Result<()> {
-    let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
     match cmd {
-        Bash(opts) => print_script(
-            pb,
-            include_bytes!("../sh/shadowenv.bash.in"),
-            opts.no_hookbook,
-        ),
-        Zsh(opts) => print_script(
-            pb,
-            include_bytes!("../sh/shadowenv.zsh.in"),
-            opts.no_hookbook,
-        ),
-        Fish => print_script(
-            pb,
-            include_bytes!("../sh/shadowenv.fish.in"),
-            true, // Fish doesn't use hookbook
-        ),
-        Nushell => install_nushell_hook(pb),
+        Bash(opts) => print_script(include_bytes!("../sh/shadowenv.bash.in"), opts.no_hookbook),
+        Zsh(opts) => print_script(include_bytes!("../sh/shadowenv.zsh.in"), opts.no_hookbook),
+        Fish => print_script(include_bytes!("../sh/shadowenv.fish.in"), true),
+        Nushell => install_nushell_hook(),
     }
 }
 
-fn install_nushell_hook(selfpath: PathBuf) -> Result<()> {
+fn install_nushell_hook() -> Result<()> {
     let output = Command::new("nu")
         .args(["-c", "$nu.user-autoload-dirs | first"])
         .output()
@@ -54,19 +41,17 @@ fn install_nushell_hook(selfpath: PathBuf) -> Result<()> {
         .with_context(|| format!("Failed to create autoload directory '{}'", autoload_dir))?;
 
     let script_path = autoload_path.join("shadowenv.nu");
-    let script = String::from_utf8_lossy(include_bytes!("../sh/shadowenv.nushell.in"));
-    let script = script.replace("@SELF@", selfpath.to_str().unwrap());
+    let script = include_bytes!("../sh/shadowenv.nushell.in");
 
-    fs::write(&script_path, script.as_bytes())
+    fs::write(&script_path, script)
         .with_context(|| format!("Failed to write '{}'", script_path.display()))?;
 
     println!("Wrote shadowenv hook to {}", script_path.display());
     Ok(())
 }
 
-fn print_script(selfpath: PathBuf, bytes: &[u8], no_hookbook: bool) -> Result<()> {
+fn print_script(bytes: &[u8], no_hookbook: bool) -> Result<()> {
     let script = String::from_utf8_lossy(bytes);
-    let script = script.replace("@SELF@", selfpath.into_os_string().to_str().unwrap());
 
     if no_hookbook {
         // If no_hookbook is true, replace @HOOKBOOK@ with an empty string
