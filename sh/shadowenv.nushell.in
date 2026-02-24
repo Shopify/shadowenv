@@ -8,7 +8,7 @@ $env.config = ($env.config | upsert hooks.env_change.PWD { |config|
       $flags = ($flags | append "--force")
     }
 
-    let result = @SELF@ hook ...$flags | complete
+    let result = shadowenv hook ...$flags | complete
     if $result.exit_code != 0 {
       return
     }

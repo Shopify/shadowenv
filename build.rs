@@ -1,6 +1,6 @@
 extern crate clap;
 
-use clap::{command, CommandFactory, ValueEnum};
+use clap::{CommandFactory, ValueEnum};
 use clap_complete::{generate_to, Shell};
 
 include!("src/cli.rs");
