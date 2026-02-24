@@ -1,13 +1,21 @@
 use crate::cli::InitCmd::{self, *};
 use anyhow::{anyhow, Context, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// print a script that can be sourced into the provided shell, and sets up the shadowenv shell
 /// hooks.
 pub fn run(cmd: InitCmd) -> Result<()> {
-    let pb = std::env::current_exe().unwrap(); // this would be... an unusual failure.
+    // Attempt to resolve the path which was passed to argv[0]
+    // This is to avoid the situation where fully resolving to something like a nix
+    // store path could be garbage collected while the shell hook is still used
+    let exe = std::env::args().next().unwrap();
+    let pb = if Path::new(&exe).is_absolute() {
+        PathBuf::from(exe)
+    } else {
+        std::env::current_dir().unwrap().join(exe)
+    };
     match cmd {
         Bash(opts) => print_script(
             pb,
