@@ -1,4 +1,54 @@
 function __shadowenv_hook --on-event fish_prompt --on-variable PWD
+  # on first run change the __fish_reconstruct_path handler to no longer remove
+  # and prepend existing fish_user_paths in PATH
+  if functions -q __fish_reconstruct_path
+    # save original __fish_reconstruct_path
+    functions -c __fish_reconstruct_path __shadowenv_original_fish_reconstruct_path
+    functions -e __fish_reconstruct_path
+
+    function __shadowenv_fish_reconstruct_path -d "Update PATH (without removing and prepending existing fish_user_paths) when fish_user_paths changes" --on-variable fish_user_paths
+      # save original PATH before calling handler
+      set -l original_path $PATH
+
+      # save original fish_user_paths to detect changes
+      set -l original_fish_user_paths $fish_user_paths
+
+      # call original fish handler
+      __shadowenv_original_fish_reconstruct_path
+
+      # detect and let handler get recalled if fish_user_paths changed
+      if test (string join -- : $original_fish_user_paths) != (string join -- : $fish_user_paths)
+        return
+      end
+
+      # save new PATH after handler
+      set -l new_path $PATH
+
+      # remove original PATH entries that are no longer in new PATH
+      set -l idx 1
+      for entry in $original_path
+        if not contains -- $entry $new_path
+          set -e original_path[$idx]
+        else
+          set idx (math $idx + 1)
+        end
+      end
+
+      # remove new PATH entries that are in original PATH
+      set -l idx 1
+      for entry in $new_path
+        if contains -- $entry $original_path
+          set -e new_path[$idx]
+        else
+          set idx (math $idx + 1)
+        end
+      end
+
+      # PATH order as only new entries prepended and kept old entries after
+      set -xg PATH $new_path $original_path
+    end
+  end
+
   set -l flags --fish
   if [ -n "$__shadowenv_force_run" ];
     set -a flags --force
