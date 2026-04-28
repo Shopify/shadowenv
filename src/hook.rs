@@ -202,8 +202,11 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
                 match v {
                     Some(s) => {
                         if k == "PATH" {
-                            let pathlist = shell_escape(&s).replace(":", "' '");
-                            println!("set -gx {} {}", shell_escape(&k), pathlist);
+                            println!(
+                                "set -gx {} (string split : -- {})",
+                                shell_escape(&k),
+                                shell_escape(&s)
+                            );
                         } else {
                             println!("set -gx {} {}", shell_escape(&k), shell_escape(&s));
                         }
