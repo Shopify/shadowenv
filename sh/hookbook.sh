@@ -19,7 +19,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-__hookbook_shell="$(\ps -p $$ | \awk 'NR > 1 { sub(/^-/, "", $4); print $4 }')"
+__hookbook_shell="$(\ps -p $$ | \awk 'NR > 1 { sub(/^-/, "", $4); gsub(/[()]/, "", $4); print $4 }')"
 __hookbook_shellname="$(basename "${__hookbook_shell}")"
 
 __hookbook_array_contains() {
@@ -77,7 +77,7 @@ __hookbook_call_each() {
     __stat_stderr='/usr/bin/stat -f "%Hr" /dev/fd/2'
   } || {
     __dev_null_major="$(stat -c "%t" /dev/null)"
-    __stat_stderr='stat -c "%t" "$(readlink -f "/dev/fd/2")"'
+    __stat_stderr='stat -L -c "%t" /dev/fd/2'
   }
   \eval "__hookbook_debug_handler() {
     [[ \"\${BASH_COMMAND}\" == \"\${PROMPT_COMMAND}\" ]] && \\return
