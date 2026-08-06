@@ -247,4 +247,28 @@ mod tests {
         let path_var = OsString::from(format!(":{}", dir.path().display()));
         assert_eq!(find_in_path("shadowenv", &path_var), None);
     }
+
+    #[test]
+    fn generated_hooks_tolerate_nounset_after_force_run() {
+        for (shell, template) in [
+            ("bash", include_bytes!("../sh/shadowenv.bash.in") as &[u8]),
+            ("zsh", include_bytes!("../sh/shadowenv.zsh.in") as &[u8]),
+        ] {
+            let script = String::from_utf8_lossy(template)
+                .replace("@SELF@", "true")
+                .replace("@HOOKBOOK@", "hookbook_add_hook() { :; }");
+            let script = format!("{script}\n__shadowenv_hook preexec\n__shadowenv_hook preexec\n");
+            let output = Command::new("bash")
+                .args(["-u", "-c"])
+                .arg(script)
+                .output()
+                .expect("bash should be available to test generated shell hooks");
+
+            assert!(
+                output.status.success(),
+                "{shell} hook failed under nounset after consuming its force flag:\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
 }
