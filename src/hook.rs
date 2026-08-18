@@ -4,15 +4,18 @@ use crate::{
     hash::{Hash, SourceList},
     lang::{self, ShadowLang},
     loader, output,
-    shadowenv::Shadowenv,
+    shadowenv::{validate_var_name, Shadowenv},
     trust::ensure_dir_tree_trusted,
     undo, unsafe_getppid,
 };
 use anyhow::{anyhow, Error};
 use serde_derive::Serialize;
 use shell_escape as shell;
-use std::{borrow::Cow, collections::HashMap, env, path::PathBuf, result::Result, str::FromStr};
+use std::{
+    borrow::Cow, collections::HashMap, env, io::Write, path::PathBuf, result::Result, str::FromStr,
+};
 
+#[derive(Clone, Copy)]
 pub enum VariableOutputMode {
     Fish,
     Porcelain,
@@ -173,6 +176,13 @@ fn load_trusted_sources(
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
     for (k, v) in shadowenv.exports()? {
+        // `env::set_var` panics on a name containing '=' or NUL. Names are
+        // rejected when a program assigns them, but a $__shadowenv_data written
+        // by an older version can still carry one, so skip rather than abort.
+        if let Err(err) = validate_var_name(&k) {
+            eprintln!("shadowenv: skipping variable: {}", err);
+            continue;
+        }
         match v {
             Some(s) => env::set_var(k, &s),
             None => env::remove_var(k),
@@ -183,44 +193,66 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
 }
 
 pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
+    let exports = shadowenv.exports()?;
+
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    write_exports(&mut out, &exports, mode)?;
+    out.flush()?;
+
     match mode {
-        VariableOutputMode::Posix => {
-            for (k, v) in shadowenv.exports()? {
-                match v {
-                    Some(s) => println!("export {}={}", shell_escape(&k), shell_escape(&s)),
-                    None => println!("unset {}", shell_escape(&k)),
-                }
-            }
+        VariableOutputMode::Posix | VariableOutputMode::Fish => {
             output::print_activation_to_tty(
                 shadowenv.current_dirs(),
                 shadowenv.prev_dirs(),
                 shadowenv.features(),
             );
         }
+        VariableOutputMode::Porcelain
+        | VariableOutputMode::Json
+        | VariableOutputMode::PrettyJson => {}
+    }
+
+    Ok(())
+}
+
+/// Render the variable assignments for `mode`. Separate from `apply_env` so
+/// that tests can assert on the exact bytes each mode produces: the escaping
+/// rules differ per mode and are only correct if checked at this boundary.
+fn write_exports<W: Write>(
+    out: &mut W,
+    exports: &HashMap<String, Option<String>>,
+    mode: VariableOutputMode,
+) -> Result<(), Error> {
+    match mode {
+        VariableOutputMode::Posix => {
+            for (k, v) in exports {
+                match v {
+                    Some(s) => writeln!(out, "export {}={}", shell_escape(k), shell_escape(s))?,
+                    None => writeln!(out, "unset {}", shell_escape(k))?,
+                }
+            }
+        }
         VariableOutputMode::Fish => {
-            for (k, v) in shadowenv.exports()? {
+            for (k, v) in exports {
                 match v {
                     Some(s) => {
                         if k == "PATH" {
-                            println!(
+                            writeln!(
+                                out,
                                 "set -gx {} (string split : -- {})",
-                                shell_escape(&k),
-                                shell_escape(&s)
-                            );
+                                shell_escape(k),
+                                shell_escape(s)
+                            )?;
                         } else {
-                            println!("set -gx {} {}", shell_escape(&k), shell_escape(&s));
+                            writeln!(out, "set -gx {} {}", shell_escape(k), shell_escape(s))?;
                         }
                     }
                     None => {
-                        println!("set -e {}", shell_escape(&k));
+                        writeln!(out, "set -e {}", shell_escape(k))?;
                     }
                 }
             }
-            output::print_activation_to_tty(
-                shadowenv.current_dirs(),
-                shadowenv.prev_dirs(),
-                shadowenv.features(),
-            );
         }
         VariableOutputMode::Porcelain => {
             // three fields: <operation> : <name> : <value>
@@ -229,20 +261,35 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
             //          3: unset (value is empty)
             // field separator is 0x1F; record separator is 0x1E. There's a trailing record
             // separator because I'm lazy but don't depend on it not going away.
-            for (k, v) in shadowenv.exports()? {
+            //
+            // Names are NOT shell-escaped here: this is a binary protocol, not
+            // something a shell evaluates, and quoting a name would make the
+            // quotes part of the name a consumer reads back. What consumers do
+            // need is the guarantee that a name never contains a separator, so
+            // that records stay parseable positionally. Names are rejected at
+            // assignment time; this also drops any that survive in a
+            // $__shadowenv_data written by an older version.
+            for (k, v) in exports {
+                if let Err(err) = validate_var_name(k) {
+                    eprintln!(
+                        "shadowenv: omitting variable from porcelain output: {}",
+                        err
+                    );
+                    continue;
+                }
                 match v {
-                    Some(s) => print!("\x02\x1F{}\x1F{}\x1E", k, s),
-                    None => print!("\x03\x1F{}\x1F\x1E", k),
+                    Some(s) => write!(out, "\x02\x1F{}\x1F{}\x1E", k, s)?,
+                    None => write!(out, "\x03\x1F{}\x1F\x1E", k)?,
                 }
             }
         }
         VariableOutputMode::Json => {
-            let modifs = Modifications::new(shadowenv.exports()?);
-            println!("{}", serde_json::to_string(&modifs).unwrap());
+            let modifs = Modifications::new(exports.clone());
+            writeln!(out, "{}", serde_json::to_string(&modifs).unwrap())?;
         }
         VariableOutputMode::PrettyJson => {
-            let modifs = Modifications::new(shadowenv.exports()?);
-            println!("{}", serde_json::to_string_pretty(&modifs).unwrap());
+            let modifs = Modifications::new(exports.clone());
+            writeln!(out, "{}", serde_json::to_string_pretty(&modifs).unwrap())?;
         }
     }
     Ok(())
@@ -258,6 +305,7 @@ mod tests {
     use crate::undo::Data;
     use std::fs;
     use tempfile::tempdir;
+    use VariableOutputMode::{Fish, Porcelain, Posix};
 
     #[test]
     fn load_trusted_source_returns_an_error_for_untrusted_folders() {
@@ -310,6 +358,27 @@ mod tests {
         assert!(sources[1].dir.ends_with("dir1/dir2"));
     }
 
+    fn render(exports: &[(&str, Option<&str>)], mode: VariableOutputMode) -> String {
+        let map: HashMap<String, Option<String>> = exports
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.map(|s| s.to_string())))
+            .collect();
+        let mut buf: Vec<u8> = Vec::new();
+        write_exports(&mut buf, &map, mode).unwrap();
+        String::from_utf8(buf).unwrap()
+    }
+
+    /// Records are emitted in HashMap order, so compare them as a set.
+    fn porcelain_records(out: &str) -> Vec<String> {
+        let mut records: Vec<String> = out
+            .split('\x1e')
+            .filter(|r| !r.is_empty())
+            .map(|r| r.to_string())
+            .collect();
+        records.sort();
+        records
+    }
+
     #[test]
     fn test_apply_env_escapes_variable_names() {
         // Test that shell_escape properly escapes dangerous characters
@@ -322,30 +391,103 @@ mod tests {
         assert_eq!(shell_escape("VAR`command`"), "'VAR`command`'");
         assert_eq!(shell_escape("VAR'with'quotes"), "'VAR'\\''with'\\''quotes'");
 
-        // Create a shadowenv with potentially malicious variable names as new variables
-        let initial_env = HashMap::new(); // Empty initial env
-        let mut env = initial_env.clone();
-        env.insert("NORMAL_VAR".to_string(), "normal_value".to_string());
-        env.insert(
-            "TEST=AA; touch pwned.txt; #".to_string(),
-            "value".to_string(),
+        // The shell-evaluated modes must quote the *name* as well as the value,
+        // or a name carrying shell metacharacters is reinterpreted by the shell
+        // that evaluates this output.
+        let out = render(&[("TEST=AA; touch pwned.txt; #", Some("value"))], Posix);
+        assert_eq!(out, "export 'TEST=AA; touch pwned.txt; #'=value\n");
+
+        let out = render(&[("VAR$(command)", None)], Posix);
+        assert_eq!(out, "unset 'VAR$(command)'\n");
+
+        let out = render(&[("VAR`command`", Some("v"))], Fish);
+        assert_eq!(out, "set -gx 'VAR`command`' v\n");
+    }
+
+    #[test]
+    fn test_porcelain_emits_names_verbatim() {
+        // Porcelain is delimiter-framed and never shell-evaluated, so a name is
+        // emitted as-is. Quoting it here would make the quotes part of the name.
+        let out = render(&[("FOO", Some("bar"))], Porcelain);
+        assert_eq!(out, "\x02\x1FFOO\x1Fbar\x1E");
+
+        let out = render(&[("FOO", None)], Porcelain);
+        assert_eq!(out, "\x03\x1FFOO\x1F\x1E");
+
+        // A name that would need quoting in a shell is still passed through.
+        let out = render(&[("VAR$(command)", Some("v"))], Porcelain);
+        assert_eq!(out, "\x02\x1FVAR$(command)\x1Fv\x1E");
+    }
+
+    #[test]
+    fn test_porcelain_never_emits_separators_inside_a_name() {
+        // A name containing a separator truncates its own record and adds
+        // spurious ones, so it must never reach the stream: consumers parse
+        // positionally and cannot recover the framing themselves.
+        let unrepresentable = "AA\x1e\x02\x1fSPURIOUS\x1fyes";
+        let out = render(
+            &[(unrepresentable, Some("v")), ("GOOD", Some("g"))],
+            Porcelain,
         );
 
-        let mut shadowenv = Shadowenv::new(initial_env, Data::new(), 0, false);
-        // Set the variables using the shadowenv API
-        shadowenv.set("NORMAL_VAR", Some("normal_value"));
-        shadowenv.set("TEST=AA; touch pwned.txt; #", Some("value"));
+        assert_eq!(
+            porcelain_records(&out),
+            vec!["\x02\x1FGOOD\x1Fg".to_string()]
+        );
+        assert!(!out.contains("SPURIOUS"));
 
-        // Test that exports returns the expected data
+        // Every emitted record has exactly the three fields the protocol defines.
+        for record in porcelain_records(&out) {
+            assert_eq!(record.split('\x1f').count(), 3, "record: {:?}", record);
+        }
+    }
+
+    #[test]
+    fn test_porcelain_record_count_matches_variable_count() {
+        let out = render(
+            &[("A", Some("1")), ("B", None), ("C", Some("3"))],
+            Porcelain,
+        );
+        assert_eq!(porcelain_records(&out).len(), 3);
+    }
+
+    #[test]
+    fn test_set_rejects_names_that_break_the_porcelain_protocol() {
+        let mut shadowenv = Shadowenv::new(HashMap::new(), Data::new(), 0, false);
+
+        assert!(shadowenv.set("NORMAL_VAR", Some("normal_value")).is_ok());
+        // Unusual but harmless: representable in every output mode.
+        assert!(shadowenv.set("TEST; touch pwned.txt; #", Some("v")).is_ok());
+
+        for bad in ["AA\x1eBB", "AA\x1fBB", "TEST=AA", "AA\nBB", "AA\0BB", ""] {
+            assert!(
+                shadowenv.set(bad, Some("value")).is_err(),
+                "expected {:?} to be rejected",
+                bad
+            );
+        }
+
+        // Rejected names must not be left behind in the environment.
         let exports = shadowenv.exports().unwrap();
         assert_eq!(
             exports.get("NORMAL_VAR"),
             Some(&Some("normal_value".to_string()))
         );
-        assert_eq!(
-            exports.get("TEST=AA; touch pwned.txt; #"),
-            Some(&Some("value".to_string()))
-        );
+        assert!(exports.keys().all(|k| !k.contains('\x1e')));
+    }
+
+    #[test]
+    fn test_pathlist_helpers_also_reject_unrepresentable_names() {
+        let mut shadowenv = Shadowenv::new(HashMap::new(), Data::new(), 0, false);
+
+        assert!(shadowenv.append_to_pathlist("AA\x1eBB", "/x").is_err());
+        assert!(shadowenv.prepend_to_pathlist("AA\x1fBB", "/x").is_err());
+        assert!(shadowenv.remove_from_pathlist("AA=BB", "/x").is_err());
+        assert!(shadowenv
+            .remove_from_pathlist_containing("AA\nBB", "/x")
+            .is_err());
+
+        assert!(shadowenv.append_to_pathlist("PATH", "/x").is_ok());
     }
 
     #[test]

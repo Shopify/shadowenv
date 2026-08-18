@@ -6,6 +6,61 @@ use std::{
     path::PathBuf,
 };
 
+/// Characters that may never appear in an environment variable name, with the
+/// reason reported to whoever wrote the offending shadowlisp.
+///
+/// 0x1E and 0x1F are the record and field separators of the `--porcelain`
+/// output format. That format is parsed positionally, so a name containing
+/// either one truncates its own record and adds spurious ones. `=` and NUL
+/// cannot occur in a real environment entry at all (`execve` encodes entries as
+/// `NAME=VALUE`, and `std::env::set_var` panics on both), and a newline breaks
+/// every line-oriented consumer.
+const FORBIDDEN_NAME_CHARS: [(char, &str); 6] = [
+    ('\0', "names may not contain a NUL byte"),
+    ('\n', "names may not contain a newline"),
+    ('\r', "names may not contain a carriage return"),
+    ('=', "names may not contain '='"),
+    (
+        '\x1e',
+        "names may not contain 0x1E, the porcelain record separator",
+    ),
+    (
+        '\x1f',
+        "names may not contain 0x1F, the porcelain field separator",
+    ),
+];
+
+#[derive(Debug, thiserror::Error)]
+#[error("invalid environment variable name {name:?}: {reason}")]
+pub struct InvalidVariableName {
+    pub name: String,
+    pub reason: &'static str,
+}
+
+/// Reject environment variable names that cannot be represented faithfully to
+/// downstream consumers. Deliberately narrower than a full POSIX identifier
+/// check: names like `foo.bar` are unusual but round-trip safely through every
+/// output mode, and rejecting them would break existing shadowlisp.
+pub fn validate_var_name(name: &str) -> Result<(), InvalidVariableName> {
+    if name.is_empty() {
+        return Err(InvalidVariableName {
+            name: name.to_string(),
+            reason: "names may not be empty",
+        });
+    }
+
+    for (forbidden, reason) in FORBIDDEN_NAME_CHARS {
+        if name.contains(forbidden) {
+            return Err(InvalidVariableName {
+                name: name.to_string(),
+                reason,
+            });
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct Shadowenv {
     /// the mutated/modified env: the final state we want to be in after eval'ing exports.
@@ -154,32 +209,46 @@ impl Shadowenv {
         Ok(changes)
     }
 
-    pub fn set(&mut self, a: &str, b: Option<&str>) {
-        env_set(&mut self.env, a.to_string(), b.map(|s| s.to_string()))
+    pub fn set(&mut self, a: &str, b: Option<&str>) -> Result<(), InvalidVariableName> {
+        validate_var_name(a)?;
+        env_set(&mut self.env, a.to_string(), b.map(|s| s.to_string()));
+        Ok(())
     }
 
     pub fn get(&self, a: &str) -> Option<String> {
         env_get(&self.env, a.to_string())
     }
 
-    pub fn remove_from_pathlist(&mut self, a: &str, b: &str) {
+    pub fn remove_from_pathlist(&mut self, a: &str, b: &str) -> Result<(), InvalidVariableName> {
+        validate_var_name(a)?;
         self.inform_list(a);
-        env_remove_from_pathlist(&mut self.env, a.to_string(), b.to_string())
+        env_remove_from_pathlist(&mut self.env, a.to_string(), b.to_string());
+        Ok(())
     }
 
-    pub fn remove_from_pathlist_containing(&mut self, a: &str, b: &str) {
+    pub fn remove_from_pathlist_containing(
+        &mut self,
+        a: &str,
+        b: &str,
+    ) -> Result<(), InvalidVariableName> {
+        validate_var_name(a)?;
         self.inform_list(a);
-        env_remove_from_pathlist_containing(&mut self.env, a.to_string(), b.to_string())
+        env_remove_from_pathlist_containing(&mut self.env, a.to_string(), b.to_string());
+        Ok(())
     }
 
-    pub fn append_to_pathlist(&mut self, a: &str, b: &str) {
+    pub fn append_to_pathlist(&mut self, a: &str, b: &str) -> Result<(), InvalidVariableName> {
+        validate_var_name(a)?;
         self.inform_list(a);
-        env_append_to_pathlist(&mut self.env, a.to_string(), b.to_string())
+        env_append_to_pathlist(&mut self.env, a.to_string(), b.to_string());
+        Ok(())
     }
 
-    pub fn prepend_to_pathlist(&mut self, a: &str, b: &str) {
+    pub fn prepend_to_pathlist(&mut self, a: &str, b: &str) -> Result<(), InvalidVariableName> {
+        validate_var_name(a)?;
         self.inform_list(a);
-        env_prepend_to_pathlist(&mut self.env, a.to_string(), b.to_string())
+        env_prepend_to_pathlist(&mut self.env, a.to_string(), b.to_string());
+        Ok(())
     }
 
     pub fn add_feature(&mut self, name: &str, version: Option<&str>) {
@@ -340,18 +409,18 @@ mod tests {
     #[test]
     fn test_get_set() {
         let mut shadowenv = build_shadow_env(vec![], Default::default());
-        shadowenv.set("toto", Some("tata"));
+        shadowenv.set("toto", Some("tata")).unwrap();
         assert_eq!(shadowenv.get("toto"), Some("tata".to_string()))
     }
 
     #[test]
     fn test_path_manipulation() {
         let mut shadowenv = build_shadow_env(vec![], Default::default());
-        shadowenv.append_to_pathlist("field1", "v1");
-        shadowenv.prepend_to_pathlist("field1", "v0");
+        shadowenv.append_to_pathlist("field1", "v1").unwrap();
+        shadowenv.prepend_to_pathlist("field1", "v0").unwrap();
 
         assert_eq!(shadowenv.get("field1"), Some("v0:v1".to_string()));
-        shadowenv.remove_from_pathlist("field1", "v0");
+        shadowenv.remove_from_pathlist("field1", "v0").unwrap();
         assert_eq!(shadowenv.get("field1"), Some("v1".to_string()))
     }
 
@@ -361,13 +430,13 @@ mod tests {
             vec![("VAR_A", "v0"), ("VAR_B", "v0"), ("PATH", "/path1:/path2")],
             Default::default(),
         );
-        shadowenv.append_to_pathlist("PATH", "/path3");
-        shadowenv.prepend_to_pathlist("PATH", "/path4");
-        shadowenv.remove_from_pathlist("PATH", "/path1");
+        shadowenv.append_to_pathlist("PATH", "/path3").unwrap();
+        shadowenv.prepend_to_pathlist("PATH", "/path4").unwrap();
+        shadowenv.remove_from_pathlist("PATH", "/path1").unwrap();
 
-        shadowenv.set("VAR_A", Some("v2"));
-        shadowenv.set("VAR_B", None);
-        shadowenv.set("VAR_C", Some("v3"));
+        shadowenv.set("VAR_A", Some("v2")).unwrap();
+        shadowenv.set("VAR_B", None).unwrap();
+        shadowenv.set("VAR_C", Some("v3")).unwrap();
 
         let expected = Data {
             scalars: vec![

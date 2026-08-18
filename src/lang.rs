@@ -142,7 +142,10 @@ impl ShadowLang {
                 let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                 let value = <&str as FromValueRef>::from_value_ref(&args[1]).ok();
 
-                shadowenv.borrow_mut_env().set(name, value);
+                shadowenv
+                    .borrow_mut_env()
+                    .set(name, value)
+                    .map_err(ketos::Error::custom)?;
                 Ok(Value::Unit)
             })
         });
@@ -158,7 +161,10 @@ impl ShadowLang {
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    wrapper.borrow_mut_env().append_to_pathlist(name, value);
+                    wrapper
+                        .borrow_mut_env()
+                        .append_to_pathlist(name, value)
+                        .map_err(ketos::Error::custom)?;
                     Ok(Value::Unit)
                 })
             });
@@ -174,7 +180,10 @@ impl ShadowLang {
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    wrapper.borrow_mut_env().prepend_to_pathlist(name, value);
+                    wrapper
+                        .borrow_mut_env()
+                        .prepend_to_pathlist(name, value)
+                        .map_err(ketos::Error::custom)?;
                     Ok(Value::Unit)
                 })
             });
@@ -190,7 +199,10 @@ impl ShadowLang {
                     let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
                     let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
 
-                    wrapper.borrow_mut_env().remove_from_pathlist(name, value);
+                    wrapper
+                        .borrow_mut_env()
+                        .remove_from_pathlist(name, value)
+                        .map_err(ketos::Error::custom)?;
                     Ok(Value::Unit)
                 })
             });
@@ -208,7 +220,8 @@ impl ShadowLang {
 
                     wrapper
                         .borrow_mut_env()
-                        .remove_from_pathlist_containing(name, value);
+                        .remove_from_pathlist_containing(name, value)
+                        .map_err(ketos::Error::custom)?;
                     Ok(Value::Unit)
                 })
             });
@@ -354,6 +367,38 @@ mod tests {
         let env = result.unwrap().exports().unwrap();
 
         assert_eq!(env["VAL_A"].as_ref().unwrap(), "42");
+    }
+
+    #[test]
+    fn test_env_set_rejects_names_containing_porcelain_separators() {
+        // Names come from shadowlisp, which can produce any text. 0x1E/0x1F are
+        // the porcelain record and field separators, so a name containing one
+        // corrupts the framing of the output editor integrations parse.
+        for bad in [
+            r#"(env/set "AA\x1e\x02\x1fSPURIOUS\x1fyes" "v")"#,
+            r#"(env/set "AA\x1fBB" "v")"#,
+            r#"(env/set "TEST=AA" "v")"#,
+            r#"(env/append-to-pathlist "AA\x1eBB" "/x")"#,
+        ] {
+            let shadowenv = build_shadow_env(vec![]);
+            let result = ShadowLang::run_programs(
+                shadowenv,
+                SourceList::new_with_sources(vec![build_source(bad)]),
+            );
+            assert!(result.is_err(), "expected {} to be rejected", bad);
+        }
+    }
+
+    #[test]
+    fn test_env_set_still_allows_unusual_but_representable_names() {
+        let shadowenv = build_shadow_env(vec![]);
+        let source = build_source(r#"(env/set "weird.name-with$stuff" "42")"#);
+
+        let result =
+            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
+        let env = result.unwrap().exports().unwrap();
+
+        assert_eq!(env["weird.name-with$stuff"].as_ref().unwrap(), "42");
     }
 
     #[test]
