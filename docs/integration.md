@@ -75,6 +75,57 @@ $ shadowenv hook --pretty-json ''
 Note that we've added a "schema" field, and that schema v3 will almost certainly remove the
 "unexported" element, so make sure not to depend on its presence.
 
+### Applying variables safely
+
+Variable names and values both come from the `.shadowenv.d` programs Shadowenv evaluates, which
+can produce any text. Apply them through whatever API your language provides for *setting* an
+environment variable, and never by building a string that your language then evaluates.
+
+Concretely, in Vim script this is wrong, because the name is re-parsed as part of the command, so
+one containing `|` or `"` is interpreted rather than used:
+
+```vim
+execute('let $' . name . ' = value')  " don't
+```
+
+and this is right, because the name is passed as data:
+
+```vim
+call setenv(name, value)              " do
+```
+
+The same distinction applies anywhere else: prefer `setenv`/`os.environ`/`ENV[]` over `eval`,
+and prefer passing an argument vector over interpolating into a shell command.
+
+### The `--porcelain` format
+
+`--porcelain` emits one record per variable, terminated by `0x1E`. Each record is a list of fields
+separated by `0x1F`:
+
+```
+<opcode> 0x1F <name> 0x1F <value> 0x1E
+```
+
+The opcodes are `0x01` (set, unexported — unused), `0x02` (set, exported) and `0x03` (unset, with
+an empty value field). There is a trailing record separator, but don't depend on that staying true.
+
+Shadowenv guarantees that a **name** never contains `0x1E`, `0x1F`, `=`, a newline, a carriage
+return, or a NUL, and is never empty. Names that would violate this are rejected when a
+`.shadowenv.d` program assigns them, and omitted from this output if one reaches it by some other
+route (for example a `$__shadowenv_data` written by an older version, in which case a warning goes
+to stderr). You can therefore split records and fields positionally without escaping.
+
+That guarantee is about *framing only*. A name is still arbitrary text — `FOO BAR`, `FOO-BAR` and
+`FOO | id` are all valid names that reach you — so it is not safe to interpolate one into anything
+your language evaluates. See "Applying variables safely" above.
+
+No such guarantee is made about **values**, which may contain any byte except `0x1E` and `0x1F`.
+
+Names are deliberately *not* quoted or escaped in this format. It is a binary protocol that nothing
+evaluates as a shell command, so escaping would only make the escape characters part of the name a
+consumer reads back. The shell-evaluated modes (default and `--fish`) do quote both names and
+values, because there the output really is evaluated by a shell.
+
 Our suggestion moving forward into 2.0.0 and later is to treat "unexported" values read from 1.3.2
 and earlier the same as "exported" values.
 
