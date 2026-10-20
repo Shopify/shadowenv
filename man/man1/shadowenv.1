@@ -17,12 +17,16 @@ Do not use color to highlight the diff
 \fB\-v\fR, \fB\-\-verbose\fR
 Show all environment variables as context to the diff
 
-.SS \fBexec\fR [\fB--dir\fR <\fBdir\fR>] <\fBchild-argv0\fR|\fB-- child-argv...\fR>
+.SS \fBexec\fR [\fB--dir\fR <\fBdir\fR>] [\fB--repair\fR] <\fBchild-argv0\fR|\fB-- child-argv...\fR>
 Execute a command after loading the environment from the current directory.
 
 .TP
 \fB\-\-dir\fR <\fBdir\fR>
 Instead of searching from the current directory for a .shadowenv.d, search from this one.
+
+.TP
+\fB\-\-repair\fR
+Restore variables the active shadowenv set that have since been unset, instead of keeping them unset as overrides.
 
 .TP
 \fBchild-argv0\fR
@@ -50,6 +54,10 @@ Suppress error printing
 .TP
 \fB\-\-shellpid\fR \fIpid\fR
 Rather than looking up the PPID, use this as the shell's pid
+
+.TP
+\fB\-\-repair\fR
+Reapply the active shadowenv if a variable it manages changed since activation, even though the current directory's programs have not changed. Variables it set that have since been unset are restored, and path list entries it added go back where its programs put them; variables set to a different value are kept as overrides unless \fB\-\-clobber\fR is also given. No activation message is printed for a repair.
 
 .SS \fBinit\fR \fIshell\fR
 Prints a script which can be eval'd to set up shadowenv in various shells

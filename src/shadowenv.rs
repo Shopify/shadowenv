@@ -91,8 +91,28 @@ impl Shadowenv {
         target_hash: u64,
         clobber: bool,
     ) -> Shadowenv {
+        Shadowenv::build(env, shadowenv_data, target_hash, clobber, false)
+    }
+
+    /// Like `new` without clobbering, except that a variable removed since activation is restored
+    /// rather than preserved as an override.
+    pub fn repairing(
+        env: HashMap<String, String>,
+        shadowenv_data: undo::Data,
+        target_hash: u64,
+    ) -> Shadowenv {
+        Shadowenv::build(env, shadowenv_data, target_hash, false, true)
+    }
+
+    fn build(
+        env: HashMap<String, String>,
+        shadowenv_data: undo::Data,
+        target_hash: u64,
+        clobber: bool,
+        restore_removed: bool,
+    ) -> Shadowenv {
         let (unshadowed_env, no_clobber, prev_dirs) =
-            Shadowenv::unshadow(&env, shadowenv_data, clobber);
+            Shadowenv::unshadow(&env, shadowenv_data, clobber, restore_removed);
 
         Shadowenv {
             env: unshadowed_env.clone(),
@@ -111,17 +131,26 @@ impl Shadowenv {
         env: &HashMap<String, String>,
         shadowenv_data: undo::Data,
         clobber: bool,
+        restore_removed: bool,
     ) -> (HashMap<String, String>, HashSet<String>, HashSet<PathBuf>) {
         let mut result = env.clone();
         let mut no_clobber = HashSet::new();
         for scalar in shadowenv_data.scalars {
-            if !clobber && scalar.no_clobber {
+            let current_value = env_get(&result, scalar.name.clone());
+            let removed = restore_removed && current_value.is_none() && scalar.current.is_some();
+
+            if !clobber && scalar.no_clobber && !removed {
                 no_clobber.insert(scalar.name);
                 continue;
             }
 
-            let current_value = env_get(&result, scalar.name.clone());
-            if current_value == scalar.current {
+            // A no_clobber original is the user's override, not the outer value, and they have
+            // since removed it: leave the variable unset outside the shadowenv.
+            if removed && scalar.no_clobber {
+                continue;
+            }
+
+            if current_value == scalar.current || removed {
                 env_set(&mut result, scalar.name, scalar.original);
             } else if !clobber {
                 no_clobber.insert(scalar.name);
@@ -177,8 +206,21 @@ impl Shadowenv {
             }
         }
         data.prev_dirs = self.current_dirs.clone();
+        data.fingerprint = Some(data.fingerprint_of(&self.exported_env()));
 
         data
+    }
+
+    /// The environment the shell ends up with once the exports are applied.
+    pub fn exported_env(&self) -> HashMap<String, String> {
+        let mut env = self.env.clone();
+        for varname in &self.no_clobber {
+            match self.initial_env.get(varname) {
+                Some(value) => env.insert(varname.clone(), value.clone()),
+                None => env.remove(varname),
+            };
+        }
+        env
     }
 
     fn format_shadowenv_data(&self) -> Result<String, Error> {
@@ -465,11 +507,17 @@ mod tests {
                 deletions: vec!["/path1".to_string()],
             }],
             prev_dirs: Default::default(),
+            fingerprint: None,
         };
 
-        let expected_formatted_data = r#"00000000075bcd15:{"scalars":[{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false},{"name":"VAR_B","original":"v0","current":null,"no_clobber":false},{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}],"lists":[{"name":"PATH","additions":["/path3","/path4"],"deletions":["/path1"]}],"prev_dirs":[]}"#;
+        let mut actual = shadowenv.shadowenv_data();
+        let fingerprint = actual.fingerprint.take().expect("fingerprint recorded");
+        assert_eq!(actual, expected);
 
-        assert_eq!(shadowenv.shadowenv_data(), expected);
+        let expected_formatted_data = format!(
+            r#"00000000075bcd15:{{"scalars":[{{"name":"VAR_A","original":"v0","current":"v2","no_clobber":false}},{{"name":"VAR_B","original":"v0","current":null,"no_clobber":false}},{{"name":"VAR_C","original":null,"current":"v3","no_clobber":false}}],"lists":[{{"name":"PATH","additions":["/path3","/path4"],"deletions":["/path1"]}}],"prev_dirs":[],"fingerprint":"{}"}}"#,
+            fingerprint
+        );
 
         assert_eq!(
             shadowenv.format_shadowenv_data().unwrap(),
@@ -490,5 +538,138 @@ mod tests {
         .collect();
 
         assert_eq!(shadowenv.exports().unwrap(), expected_export);
+    }
+
+    fn env_of(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    fn apply_exports(
+        shadowenv: &Shadowenv,
+        env: &HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        let mut shell = env.clone();
+        for (name, value) in shadowenv.exports().unwrap() {
+            match value {
+                Some(value) => shell.insert(name, value),
+                None => shell.remove(&name),
+            };
+        }
+        shell
+    }
+
+    fn zone(mut shadowenv: Shadowenv) -> Shadowenv {
+        shadowenv.prepend_to_pathlist("PATH", "/zone/bin").unwrap();
+        shadowenv.set("GEM_HOME", Some("/zone/gem")).unwrap();
+        shadowenv
+    }
+
+    fn activate(env: &HashMap<String, String>) -> (Data, HashMap<String, String>) {
+        let shadowenv = zone(Shadowenv::new(env.clone(), Data::new(), 1, false));
+        (shadowenv.shadowenv_data(), apply_exports(&shadowenv, env))
+    }
+
+    #[test]
+    fn test_exported_env_is_what_the_shell_has_after_applying_exports() {
+        let (data, mut shell) = activate(&env_of(&[("PATH", "/usr/bin"), ("KEEP", "1")]));
+        shell.insert("GEM_HOME".to_string(), "/mine".to_string());
+        shell.insert(
+            "PATH".to_string(),
+            "/elsewhere:/zone/bin:/usr/bin".to_string(),
+        );
+
+        let reapplied = zone(Shadowenv::new(shell.clone(), data, 1, false));
+        let mut applied = apply_exports(&reapplied, &shell);
+        let mut exported = reapplied.exported_env();
+        applied.remove("__shadowenv_data");
+        exported.remove("__shadowenv_data");
+
+        assert_eq!(applied, exported);
+        assert_eq!(applied.get("GEM_HOME"), Some(&"/mine".to_string()));
+    }
+
+    #[test]
+    fn test_fingerprint_matches_the_shell_after_activation() {
+        let (data, shell) = activate(&env_of(&[("PATH", "/usr/bin")]));
+
+        assert_eq!(data.fingerprint.as_ref().map(String::len), Some(16));
+        assert!(!data.drifted(&shell));
+    }
+
+    #[test]
+    fn test_fingerprint_detects_a_changed_list_and_a_removed_scalar() {
+        let (data, shell) = activate(&env_of(&[("PATH", "/usr/bin")]));
+
+        let mut prepended = shell.clone();
+        prepended.insert(
+            "PATH".to_string(),
+            "/elsewhere:/zone/bin:/usr/bin".to_string(),
+        );
+        assert!(data.drifted(&prepended));
+
+        let mut removed = shell.clone();
+        removed.remove("GEM_HOME");
+        assert!(data.drifted(&removed));
+    }
+
+    #[test]
+    fn test_new_keeps_a_removed_variable_unset() {
+        let (data, mut shell) = activate(&env_of(&[("PATH", "/usr/bin")]));
+        shell.remove("GEM_HOME");
+
+        let reapplied = zone(Shadowenv::new(shell, data, 1, false));
+
+        assert!(!reapplied.exports().unwrap().contains_key("GEM_HOME"));
+    }
+
+    #[test]
+    fn test_repairing_restores_a_removed_variable_and_the_list_order() {
+        let (data, mut shell) = activate(&env_of(&[("PATH", "/usr/bin")]));
+        shell.remove("GEM_HOME");
+        shell.insert(
+            "PATH".to_string(),
+            "/elsewhere:/zone/bin:/usr/bin".to_string(),
+        );
+
+        let repaired = zone(Shadowenv::repairing(shell.clone(), data, 1));
+        let applied = apply_exports(&repaired, &shell);
+
+        assert_eq!(applied.get("GEM_HOME"), Some(&"/zone/gem".to_string()));
+        assert_eq!(
+            applied.get("PATH"),
+            Some(&"/zone/bin:/elsewhere:/usr/bin".to_string())
+        );
+        assert!(!repaired.shadowenv_data().drifted(&applied));
+    }
+
+    #[test]
+    fn test_repairing_restores_a_variable_already_marked_no_clobber() {
+        let (mut data, mut shell) = activate(&env_of(&[("PATH", "/usr/bin")]));
+        for scalar in data.scalars.iter_mut() {
+            scalar.no_clobber = scalar.name == "GEM_HOME";
+        }
+        shell.remove("GEM_HOME");
+
+        let repaired = zone(Shadowenv::repairing(shell.clone(), data, 1));
+
+        assert_eq!(
+            apply_exports(&repaired, &shell).get("GEM_HOME"),
+            Some(&"/zone/gem".to_string())
+        );
+    }
+
+    #[test]
+    fn test_repairing_keeps_a_deliberately_overridden_variable() {
+        let (data, mut shell) = activate(&env_of(&[("PATH", "/usr/bin")]));
+        shell.insert("GEM_HOME".to_string(), "/mine".to_string());
+
+        let repaired = zone(Shadowenv::repairing(shell.clone(), data, 1));
+        let applied = apply_exports(&repaired, &shell);
+
+        assert_eq!(applied.get("GEM_HOME"), Some(&"/mine".to_string()));
+        assert!(!repaired.shadowenv_data().drifted(&applied));
     }
 }

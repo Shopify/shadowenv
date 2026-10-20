@@ -20,6 +20,10 @@ pub struct ExecCmd {
     #[arg(long)]
     pub dir: Option<String>,
 
+    /// Restore variables the active shadowenv set that have since been unset.
+    #[arg(long)]
+    pub repair: bool,
+
     /// The command to execute if there are no arguments.
     pub cmd_argv0: Option<String>,
 
@@ -58,6 +62,11 @@ pub struct HookCmd {
     /// Clobber overridden environment variables when unshadowing.
     #[arg(long)]
     pub clobber: bool,
+
+    /// Reapply the active shadowenv if a variable it manages changed since activation, restoring
+    /// any it set that have since been unset. Overrides are kept unless --clobber is also given.
+    #[arg(long)]
+    pub repair: bool,
 
     #[command(flatten)]
     pub format: FormatOptions,
