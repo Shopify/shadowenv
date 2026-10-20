@@ -75,6 +75,37 @@ $ shadowenv hook --pretty-json ''
 Note that we've added a "schema" field, and that schema v3 will almost certainly remove the
 "unexported" element, so make sure not to depend on its presence.
 
+### Repairing a drifted environment
+
+`shadowenv hook` does nothing while `__shadowenv_data` says the current directory's programs are
+already applied. If something changes a variable Shadowenv manages after that (a login shell
+rerunning a profile that reorders `PATH`, or a script that unsets a variable), the environment
+stays changed until the directory or its programs change.
+
+Tools that run commands on a user's behalf, outside the interactive prompt hook, can pass
+`--repair` to correct this:
+
+```
+$ shadowenv hook --porcelain --repair
+$ shadowenv exec --repair -- <command>
+```
+
+With `--repair`, `hook` compares the managed variables against a fingerprint stored in
+`__shadowenv_data` at activation and reapplies only when they differ. Data written by a Shadowenv
+without fingerprints always counts as drifted, so the first repair records one. A repair:
+
+* puts the entries Shadowenv added to path lists back where the programs put them;
+* restores variables Shadowenv set that have since been unset;
+* keeps variables set to a different value, as an ordinary reapply does (pass `--clobber` to
+  discard those too);
+* prints no activation message.
+
+A repair only stays repaired if the caller applies the new `__shadowenv_data` to the environment
+it keeps. A tool that applies the output only to a child process will repair again on every call.
+
+`exec --repair` reapplies unconditionally, as `exec` always does, and also restores unset variables.
+The shell hooks from `shadowenv init` do not pass `--repair`.
+
 ### Applying variables safely
 
 Variable names and values both come from the `.shadowenv.d` programs Shadowenv evaluates, which

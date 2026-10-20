@@ -55,14 +55,21 @@ pub fn run(cmd: HookCmd) -> Result<(), Error> {
     };
 
     let data = Shadowenv::from_env();
-    let result =
-        load_env(get_current_dir_or_exit(), data, cmd.force, cmd.clobber).and_then(|loaded_env| {
-            if let Some(shadowenv) = loaded_env {
-                apply_env(&shadowenv, mode)
-            } else {
-                Ok(())
-            }
-        });
+    let options = LoadOptions {
+        force: cmd.force,
+        clobber: cmd.clobber,
+        repair: cmd.repair,
+    };
+    let result = load_env(
+        get_current_dir_or_exit(),
+        data,
+        env::vars().collect(),
+        options,
+    )
+    .and_then(|loaded| match loaded {
+        Some(loaded) => apply_env(&loaded.shadowenv, mode, !loaded.repaired),
+        None => Ok(()),
+    });
 
     // Reformat the error if needed.
     if let Err(err) = result {
@@ -79,12 +86,38 @@ pub fn run(cmd: HookCmd) -> Result<(), Error> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LoadOptions {
+    /// Reapply even if the sources haven't changed.
+    pub force: bool,
+    /// Discard overrides of variables the active shadowenv set.
+    pub clobber: bool,
+    /// Reapply if a variable the active shadowenv manages changed since activation, and restore
+    /// any it set that have since been unset.
+    pub repair: bool,
+}
+
+pub struct Loaded {
+    pub shadowenv: Shadowenv,
+    /// The sources were unchanged; the environment was reapplied only because it had drifted.
+    pub repaired: bool,
+}
+
 pub fn load_env(
     pathbuf: PathBuf,
     shadowenv_data: String,
-    force: bool,
-    clobber: bool,
-) -> Result<Option<Shadowenv>, Error> {
+    env: HashMap<String, String>,
+    options: LoadOptions,
+) -> Result<Option<Loaded>, Error> {
+    let (active, json_data) = split_shadowenv_data(&shadowenv_data)?;
+
+    // "targets" are sources of shadowenv lisp files
+    let targets = load_trusted_sources(pathbuf, false)?;
+
+    load_env_from(active, json_data, targets, env, options)
+}
+
+fn split_shadowenv_data(shadowenv_data: &str) -> Result<(Option<Hash>, &str), Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -96,10 +129,19 @@ pub fn load_env(
         Some(x) => Some(Hash::from_str(x)?),
     };
 
-    // "targets" are sources of shadowenv lisp files
-    let targets = load_trusted_sources(pathbuf, false)?;
+    Ok((active, json_data))
+}
 
+fn load_env_from(
+    active: Option<Hash>,
+    json_data: &str,
+    targets: Option<SourceList>,
+    env: HashMap<String, String>,
+    options: LoadOptions,
+) -> Result<Option<Loaded>, Error> {
     let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
+    let mut data = None;
+    let mut repaired = false;
 
     // before we had multiple targets, this ensured we only act if we needed to
     match (&active, &targets) {
@@ -108,38 +150,52 @@ pub fn load_env(
             return Ok(None);
         }
         // if there is an active shadowenv and some action we've taken leads us to still be in the same one, we do nothing
-        // unless the force flag was specified
+        // unless the force flag was specified, or the repair flag was and the environment drifted
         // probably need to update whatever sets prev_hash to be a hash of all the targets' hashes (?)
-        (Some(a), Some(_)) if a.hash == targets_hash.unwrap() && !force => {
-            return Ok(None);
+        (Some(a), Some(_)) if a.hash == targets_hash.unwrap() && !options.force => {
+            if !options.repair {
+                return Ok(None);
+            }
+            let parsed = undo::Data::from_str(json_data)?;
+            if !parsed.drifted(&env) {
+                return Ok(None);
+            }
+            data = Some(parsed);
+            repaired = true;
         }
         (_, _) => (),
     }
 
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
-    let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(
-        env::vars().collect(),
-        data,
-        targets_hash.unwrap_or(0),
-        clobber,
-    );
+    let data = match data {
+        Some(data) => data,
+        None => undo::Data::from_str(json_data)?,
+    };
+    let target_hash = targets_hash.unwrap_or(0);
+    let shadowenv = if options.repair && !options.clobber {
+        Shadowenv::repairing(env, data, target_hash)
+    } else {
+        Shadowenv::new(env, data, target_hash, options.clobber)
+    };
 
-    match targets {
+    let shadowenv = match targets {
         Some(targets) => {
             // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
             match ShadowLang::run_programs(shadowenv, targets) {
                 // no need to return anything descriptive here since we already
                 // had ketos print it to stderr.
-                Err(_) => Err(lang::ShadowlispError {}.into()),
-                // note the "true" since we ran code to activate/modify the shadowenv
-                Ok(shadowenv) => Ok(Some(shadowenv)),
+                Err(_) => return Err(lang::ShadowlispError {}.into()),
+                Ok(shadowenv) => shadowenv,
             }
         }
-        // note the "false" since we didn't have anything to run
-        None => Ok(Some(shadowenv)),
-    }
+        None => shadowenv,
+    };
+
+    Ok(Some(Loaded {
+        shadowenv,
+        repaired,
+    }))
 }
 
 /// Load all Sources from the current dir, ensuring that they are all trusted.
@@ -192,7 +248,11 @@ pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), Error> {
+pub fn apply_env(
+    shadowenv: &Shadowenv,
+    mode: VariableOutputMode,
+    announce: bool,
+) -> Result<(), Error> {
     let exports = shadowenv.exports()?;
 
     let stdout = std::io::stdout();
@@ -201,16 +261,14 @@ pub fn apply_env(shadowenv: &Shadowenv, mode: VariableOutputMode) -> Result<(), 
     out.flush()?;
 
     match mode {
-        VariableOutputMode::Posix | VariableOutputMode::Fish => {
+        VariableOutputMode::Posix | VariableOutputMode::Fish if announce => {
             output::print_activation_to_tty(
                 shadowenv.current_dirs(),
                 shadowenv.prev_dirs(),
                 shadowenv.features(),
             );
         }
-        VariableOutputMode::Porcelain
-        | VariableOutputMode::Json
-        | VariableOutputMode::PrettyJson => {}
+        _ => {}
     }
 
     Ok(())
@@ -530,5 +588,227 @@ mod tests {
         for (input, expected) in test_cases {
             assert_eq!(shell_escape(input), expected, "Failed for input: {}", input);
         }
+    }
+
+    struct Zone {
+        _dir: tempfile::TempDir,
+        path: PathBuf,
+    }
+
+    impl Zone {
+        fn new() -> Zone {
+            let dir = tempdir().unwrap();
+            let path = dir.path().to_path_buf();
+            fs::create_dir(path.join(".shadowenv.d")).unwrap();
+            fs::write(
+                path.join(".shadowenv.d/zone.lisp"),
+                r#"(env/set "GEM_HOME" "/zone/gem") (env/prepend-to-pathlist "PATH" "/zone/bin")"#,
+            )
+            .unwrap();
+            Zone { _dir: dir, path }
+        }
+
+        fn load(
+            &self,
+            marker: &str,
+            env: &HashMap<String, String>,
+            options: LoadOptions,
+        ) -> Option<Loaded> {
+            let (active, json_data) = split_shadowenv_data(marker).unwrap();
+            let targets = load_trusted_sources(self.path.clone(), true).unwrap();
+            load_env_from(active, json_data, targets, env.clone(), options).unwrap()
+        }
+
+        fn activate(&self) -> HashMap<String, String> {
+            let env = HashMap::from([("PATH".to_string(), "/usr/bin".to_string())]);
+            let loaded = self.load("", &env, LoadOptions::default()).unwrap();
+            apply(&loaded, &env)
+        }
+    }
+
+    fn apply(loaded: &Loaded, env: &HashMap<String, String>) -> HashMap<String, String> {
+        let mut shell = env.clone();
+        for (name, value) in loaded.shadowenv.exports().unwrap() {
+            match value {
+                Some(value) => shell.insert(name, value),
+                None => shell.remove(&name),
+            };
+        }
+        shell
+    }
+
+    fn marker(shell: &HashMap<String, String>) -> String {
+        shell["__shadowenv_data"].clone()
+    }
+
+    fn drift(shell: &HashMap<String, String>) -> HashMap<String, String> {
+        let mut drifted = shell.clone();
+        drifted.remove("GEM_HOME");
+        drifted.insert("PATH".to_string(), format!("/elsewhere:{}", shell["PATH"]));
+        drifted
+    }
+
+    const REPAIR: LoadOptions = LoadOptions {
+        force: false,
+        clobber: false,
+        repair: true,
+    };
+
+    #[test]
+    fn load_env_ignores_drift_without_repair() {
+        let zone = Zone::new();
+        let shell = zone.activate();
+        let drifted = drift(&shell);
+
+        assert!(zone
+            .load(&marker(&shell), &drifted, LoadOptions::default())
+            .is_none());
+    }
+
+    #[test]
+    fn load_env_repairs_drift_when_the_sources_are_unchanged() {
+        let zone = Zone::new();
+        let shell = zone.activate();
+        let drifted = drift(&shell);
+
+        let loaded = zone.load(&marker(&shell), &drifted, REPAIR).unwrap();
+        assert!(loaded.repaired);
+        let repaired = apply(&loaded, &drifted);
+        assert_eq!(repaired["GEM_HOME"], "/zone/gem");
+        assert_eq!(repaired["PATH"], "/zone/bin:/elsewhere:/usr/bin");
+
+        assert!(zone.load(&marker(&repaired), &repaired, REPAIR).is_none());
+    }
+
+    #[test]
+    fn load_env_with_repair_does_nothing_when_nothing_drifted() {
+        let zone = Zone::new();
+        let shell = zone.activate();
+
+        assert!(zone.load(&marker(&shell), &shell, REPAIR).is_none());
+    }
+
+    #[test]
+    fn load_env_repairs_a_marker_written_before_fingerprints() {
+        let zone = Zone::new();
+        let shell = zone.activate();
+        let (hash, json) = marker(&shell)
+            .split_once(':')
+            .map(|(h, j)| (h.to_string(), j.to_string()))
+            .unwrap();
+        let mut data: serde_json::Value = serde_json::from_str(&json).unwrap();
+        data.as_object_mut().unwrap().remove("fingerprint");
+        let legacy = format!("{}:{}", hash, data);
+        let drifted = drift(&shell);
+
+        let loaded = zone.load(&legacy, &drifted, REPAIR).unwrap();
+        assert_eq!(apply(&loaded, &drifted)["GEM_HOME"], "/zone/gem");
+    }
+
+    #[test]
+    fn load_env_repairs_a_variable_a_forced_hook_marked_no_clobber() {
+        let zone = Zone::new();
+        let shell = zone.activate();
+        let mut unset = shell.clone();
+        unset.remove("GEM_HOME");
+        let force = LoadOptions {
+            force: true,
+            ..LoadOptions::default()
+        };
+        let forced = zone.load(&marker(&shell), &unset, force).unwrap();
+        let after_force = apply(&forced, &unset);
+        assert!(!after_force.contains_key("GEM_HOME"));
+        assert!(marker(&after_force).contains(
+            r#""name":"GEM_HOME","original":null,"current":"/zone/gem","no_clobber":true"#
+        ));
+
+        let loaded = zone
+            .load(&marker(&after_force), &after_force, REPAIR)
+            .unwrap();
+        assert_eq!(apply(&loaded, &after_force)["GEM_HOME"], "/zone/gem");
+    }
+
+    #[test]
+    fn load_env_does_not_parse_a_marker_it_does_not_need() {
+        let env = HashMap::new();
+        let (active, json_data) = split_shadowenv_data("0000000000000000:{trunc").unwrap();
+
+        assert!(load_env_from(active, json_data, None, env, REPAIR)
+            .unwrap()
+            .is_none());
+    }
+
+    fn leave(shell: &HashMap<String, String>) -> HashMap<String, String> {
+        let (active, json_data) = split_shadowenv_data(&shell["__shadowenv_data"]).unwrap();
+        let loaded = load_env_from(
+            active,
+            json_data,
+            None,
+            shell.clone(),
+            LoadOptions::default(),
+        )
+        .unwrap()
+        .unwrap();
+        apply(&loaded, shell)
+    }
+
+    #[test]
+    fn load_env_leaves_a_removed_override_unset_after_leaving() {
+        let zone = Zone::new();
+        let mut outer = HashMap::from([("PATH".to_string(), "/usr/bin".to_string())]);
+        let activated = apply(
+            &zone.load("", &outer, LoadOptions::default()).unwrap(),
+            &outer,
+        );
+        outer = activated.clone();
+        outer.insert("GEM_HOME".to_string(), "/mine".to_string());
+        let force = LoadOptions {
+            force: true,
+            ..LoadOptions::default()
+        };
+        let mut overridden = apply(&zone.load(&marker(&outer), &outer, force).unwrap(), &outer);
+        assert_eq!(overridden["GEM_HOME"], "/mine");
+
+        overridden.remove("GEM_HOME");
+        let repaired = apply(
+            &zone
+                .load(&marker(&overridden), &overridden, REPAIR)
+                .unwrap(),
+            &overridden,
+        );
+        assert_eq!(repaired["GEM_HOME"], "/zone/gem");
+
+        let left = leave(&repaired);
+        assert!(!left.contains_key("GEM_HOME"));
+        assert_eq!(left["PATH"], "/usr/bin");
+    }
+
+    #[test]
+    fn load_env_restores_the_outer_value_of_a_removed_variable_after_leaving() {
+        let zone = Zone::new();
+        let outer = HashMap::from([
+            ("PATH".to_string(), "/usr/bin".to_string()),
+            ("GEM_HOME".to_string(), "/outer".to_string()),
+        ]);
+        let mut shell = apply(
+            &zone.load("", &outer, LoadOptions::default()).unwrap(),
+            &outer,
+        );
+        shell.remove("GEM_HOME");
+
+        let repaired = apply(&zone.load(&marker(&shell), &shell, REPAIR).unwrap(), &shell);
+        assert_eq!(repaired["GEM_HOME"], "/zone/gem");
+        assert_eq!(leave(&repaired)["GEM_HOME"], "/outer");
+    }
+
+    #[test]
+    fn load_env_without_repair_does_not_parse_a_matching_marker() {
+        let zone = Zone::new();
+        let shell = zone.activate();
+        let hash = marker(&shell).split_once(':').unwrap().0.to_string();
+
+        assert!(zone
+            .load(&format!("{}:{{trunc", hash), &shell, LoadOptions::default())
+            .is_none());
     }
 }

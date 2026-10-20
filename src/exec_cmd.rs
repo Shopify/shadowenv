@@ -1,6 +1,11 @@
-use crate::{cli::ExecCmd, get_current_dir_or_exit, hook, shadowenv::Shadowenv};
+use crate::{
+    cli::ExecCmd,
+    get_current_dir_or_exit,
+    hook::{self, LoadOptions},
+    shadowenv::Shadowenv,
+};
 use anyhow::Error;
-use std::{iter, path::PathBuf};
+use std::{env, iter, path::PathBuf};
 
 /// Execute the provided command (argv) after loading the environment from the current directory
 pub fn run(cmd: ExecCmd) -> Result<(), Error> {
@@ -10,8 +15,13 @@ pub fn run(cmd: ExecCmd) -> Result<(), Error> {
         .map(PathBuf::from)
         .unwrap_or(get_current_dir_or_exit());
 
-    if let Some(shadowenv) = hook::load_env(pathbuf, data, true, false)? {
-        hook::mutate_own_env(&shadowenv)?;
+    let options = LoadOptions {
+        force: true,
+        clobber: false,
+        repair: cmd.repair,
+    };
+    if let Some(loaded) = hook::load_env(pathbuf, data, env::vars().collect(), options)? {
+        hook::mutate_own_env(&loaded.shadowenv)?;
     }
 
     let argv = if let Some(argv0) = cmd.cmd_argv0 {
