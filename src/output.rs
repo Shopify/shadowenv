@@ -1,14 +1,39 @@
-use crate::{features::Feature, loader, trust};
+use crate::{features::Feature, lang, loader, trust};
 use anyhow::{anyhow, Error};
 use regex::Regex;
 use std::{
+    borrow::Cow,
     collections::HashSet,
     env,
+    fmt::Write,
     fs::{self, OpenOptions},
     io::IsTerminal,
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
+
+/// Escapes characters a terminal would act on rather than display: control characters other
+/// than newline and tab (ESC, and the C1 controls that also begin escape sequences) and the
+/// Unicode bidirectional overrides. Text shown to the user can come from untrusted places:
+/// directory names, `parent` symlink targets, `.lisp` source, `provide` arguments, values.
+pub fn sanitize_for_terminal(s: &str) -> Cow<'_, str> {
+    let acted_on = |c: char| {
+        (c.is_control() && c != '\n' && c != '\t')
+            || matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+    };
+    if !s.chars().any(acted_on) {
+        return Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        if acted_on(c) {
+            let _ = write!(out, "\\u{{{:x}}}", c as u32);
+        } else {
+            out.push(c);
+        }
+    }
+    Cow::Owned(out)
+}
 
 // "shadowenv" in a gradient of lighter to darker grays. Looks good on dark backgrounds and ok on
 // light backgrounds.
@@ -29,6 +54,14 @@ pub fn format_hook_error(err: Error, shellpid: u32, silent: bool) -> Option<Stri
         return None;
     }
 
+    // A Shadowlisp error's detail goes on its own lines ahead of the banner, as under Ketos:
+    // dev reads the start of stderr to find a generated file that doesn't parse.
+    if let Some(lisp) = err.downcast_ref::<lang::Error>() {
+        let detail = sanitize_for_terminal(&lisp.detail()).into_owned();
+        return Some(format!(
+            "{detail}\n{SHADOWENV} \x1b[1;31mfailure: error while evaluating shadowlisp\x1b[0m"
+        ));
+    }
     let err = backticks_to_bright_green(err);
     Some(format!("{} \x1b[1;31mfailure: {}\x1b[0m", SHADOWENV, err))
 }
@@ -49,7 +82,7 @@ pub fn print_activation_to_tty(
             " \x1b[1;38;5;245m{}",
             features
                 .iter()
-                .map(|s| s.to_string())
+                .map(|s| sanitize_for_terminal(&s.to_string()).into_owned())
                 .collect::<Vec<_>>()
                 .join("\x1b[38;5;240m,\x1b[1;38;5;245m")
         )
@@ -95,7 +128,7 @@ fn backticks_to_bright_green(err: Error) -> String {
     let re = Regex::new(r"`(.*?)`").unwrap();
     // this is almost certainly not the best way to do this, but this runs at most once per
     // execution so I only care so much.
-    let before = format!("{}", err);
+    let before = sanitize_for_terminal(&err.to_string()).into_owned();
     re.replace_all(before.as_ref(), "\x1b[1;32m$1\x1b[1;31m")
         .to_string()
 }
@@ -153,8 +186,14 @@ fn err_file(root: &Path, errindex: u32, shellpid: u32) -> Result<PathBuf, Error>
 }
 
 // return value of Ok(true) indicates it's on cooldown and should be suppressed.
+//
+// The sentinel lives in a `.shadowenv.d` that isn't trusted yet, so its contents are the
+// attacker's: never follow a symlink there.
 fn check_cooldown_sentinel(path: &Path, timeout: Duration) -> Result<bool, Error> {
-    let metadata = path.metadata()?;
+    let metadata = path.symlink_metadata()?;
+    if !metadata.is_file() {
+        return Ok(false);
+    }
     let mtime = metadata.modified()?;
 
     let now = SystemTime::now();
@@ -163,12 +202,16 @@ fn check_cooldown_sentinel(path: &Path, timeout: Duration) -> Result<bool, Error
     Ok(elapsed < timeout)
 }
 
+/// Creates the sentinel afresh. `remove_file` deletes a symlink itself, not its target, and
+/// `create_new` (`O_CREAT | O_EXCL`) refuses to follow one, so a planted link can't redirect
+/// the write to another file.
 fn create_cooldown_sentinel(path: PathBuf) -> Result<(), Error> {
-    let _ = OpenOptions::new()
-        .truncate(true)
-        .write(true)
-        .create(true)
-        .open(path)?;
+    match fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    OpenOptions::new().write(true).create_new(true).open(path)?;
     Ok(())
 }
 
@@ -183,4 +226,38 @@ fn should_print_activation() -> bool {
     };
 
     std::io::stderr().is_terminal() && configured_to_print
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_for_terminal_escapes_what_terminals_act_on() {
+        assert_eq!(
+            sanitize_for_terminal("ruby\x1b]0;title\x07 \u{9b}31m \u{202e}cba\r"),
+            r"ruby\u{1b}]0;title\u{7} \u{9b}31m \u{202e}cba\u{d}"
+        );
+        let printable = "/home/ü/ruby 3.3\n\twith `backticks`";
+        assert!(matches!(
+            sanitize_for_terminal(printable),
+            Cow::Borrowed(s) if s == printable
+        ));
+    }
+
+    #[test]
+    fn test_cooldown_sentinel_never_writes_through_a_planted_symlink() {
+        // Sentinels are written into a `.shadowenv.d` that isn't trusted yet.
+        let dir = tempfile::tempdir().unwrap();
+        let victim = dir.path().join("victim");
+        fs::write(&victim, "precious").unwrap();
+        let sentinel = err_file(dir.path(), 0, 4242).unwrap();
+        std::os::unix::fs::symlink(&victim, &sentinel).unwrap();
+
+        assert!(!check_cooldown_sentinel(&sentinel, cooldown()).unwrap());
+        create_cooldown_sentinel(sentinel.clone()).unwrap();
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
+        assert!(sentinel.symlink_metadata().unwrap().is_file());
+        assert!(check_cooldown_sentinel(&sentinel, cooldown()).unwrap());
+    }
 }

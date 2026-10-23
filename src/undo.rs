@@ -22,6 +22,21 @@ pub struct List {
     pub additions: Vec<String>,
     #[serde(default)]
     pub deletions: Vec<String>,
+    /// The whole value before and after activation. Lets deactivation restore the original
+    /// exactly, order included, when nothing else has changed the variable since. Absent in data
+    /// written by older versions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exact: Option<ListValues>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
+pub struct ListValues {
+    pub original: Option<String>,
+    pub current: Option<String>,
+    /// Entries the activation put where they are in `current` by prepending or appending them.
+    /// Their position says nothing about where they were in `original`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub placed: Vec<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
@@ -63,11 +78,18 @@ impl Data {
         })
     }
 
-    pub fn add_list(&mut self, name: String, additions: Vec<String>, deletions: Vec<String>) {
+    pub fn add_list(
+        &mut self,
+        name: String,
+        additions: Vec<String>,
+        deletions: Vec<String>,
+        exact: Option<ListValues>,
+    ) {
         self.lists.push(List {
             name,
             additions,
             deletions,
+            exact,
         })
     }
 }

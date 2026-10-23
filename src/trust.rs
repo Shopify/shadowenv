@@ -5,10 +5,10 @@ use rand::rngs::OsRng;
 use std::{
     convert::TryInto,
     env,
-    ffi::OsString,
     fmt::Display,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions, Permissions},
     io::{prelude::*, ErrorKind},
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -63,19 +63,37 @@ fn is_dir_trusted(signer: &SigningKey, root: &Path) -> Result<bool, Error> {
     let msg = d.as_bytes();
 
     let path = trust_file(root, fingerprint);
-    let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(path) {
-        Ok(bytes) => Ok(Some(bytes)),
-        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
+    let r_o_bytes: Result<Option<Vec<u8>>, Error> = match read_signature(&path) {
+        Ok(bytes) => Ok(bytes),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     };
 
     match r_o_bytes? {
         None => Ok(false),
-        Some(bytes) => {
-            let sig = Signature::from_bytes(&bytes.try_into().unwrap());
-            Ok(signer.verify(msg, &sig).is_ok())
-        }
+        // A signature file of the wrong length can't be valid: treat it as no signature rather
+        // than panicking on every prompt.
+        Some(bytes) => match <[u8; 64]>::try_from(bytes.as_slice()) {
+            Ok(bytes) => Ok(signer.verify(msg, &Signature::from_bytes(&bytes)).is_ok()),
+            Err(_) => Ok(false),
+        },
     }
+}
+
+/// Reads a signature file from a directory that may not be trusted yet, so its contents are the
+/// attacker's: refuse anything but a regular file (a symlink to one is fine; one to `/dev/zero`
+/// or a FIFO is not, and the FIFO mustn't block) and read no more than a signature's worth.
+fn read_signature(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Ok(None);
+    }
+    let mut bytes = Vec::with_capacity(65);
+    file.take(65).read_to_end(&mut bytes)?;
+    Ok(Some(bytes))
 }
 
 fn load_or_generate_signer() -> Result<SigningKey, Error> {
@@ -83,16 +101,23 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
 
     let r_o_bytes: Result<Option<Vec<u8>>, Error> = match fs::read(Path::new(&path)) {
         Ok(bytes) => Ok(Some(bytes)),
-        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e.into()),
     };
     match r_o_bytes? {
         Some(bytes) => {
+            // Older versions created the key with the umask's mode, usually world-readable, and
+            // anyone who can read it can sign trust for their own directories. If this fails, we
+            // can't change it anyway (someone else owns the file), and the key still works.
+            if fs::metadata(&path).is_ok_and(|m| m.permissions().mode() & 0o077 != 0) {
+                let _ = fs::set_permissions(&path, Permissions::from_mode(0o600));
+            }
             // We used to write the entire keypair to the file, but now we only write the private key.
             // So it's important to take only the first 32 bytes here.
-            let key_bytes: [u8; 32] = bytes[..32]
-                .try_into()
-                .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+            let key_bytes: [u8; 32] = bytes
+                .get(..32)
+                .and_then(|b| b.try_into().ok())
+                .ok_or_else(|| anyhow::anyhow!("Invalid key length"))?;
             Ok(SigningKey::from_bytes(&key_bytes))
         }
         None => {
@@ -100,11 +125,12 @@ fn load_or_generate_signer() -> Result<SigningKey, Error> {
             let key = SigningKey::generate(&mut csprng);
 
             fs::create_dir_all(Path::new(&path).to_path_buf().parent().unwrap())?;
-            let mut file = match File::create(OsString::from(&path)) {
-                // TODO: error type
-                Err(why) => panic!("couldn''t write to {}: {}", path, why),
-                Ok(f) => f,
-            };
+            // Only the user may read it; `create_new` won't follow a link planted at the path.
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)?;
 
             // Write out just the 32-byte private key.
             file.write_all(&key.to_bytes())?;
@@ -137,8 +163,17 @@ fn trust_dir(signer: &SigningKey, root: &Path) -> Result<(), Error> {
     let pubkey = signer.verifying_key();
     let fingerprint = hex::encode(&pubkey.as_bytes()[0..4]);
 
+    // Replace rather than overwrite: `create_new` won't follow a symlink planted at this path.
     let path = trust_file(root, fingerprint);
-    let mut file = File::create(&path)?;
+    match fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
 
     write_gitignore(root)?;
 
@@ -148,9 +183,14 @@ fn trust_dir(signer: &SigningKey, root: &Path) -> Result<(), Error> {
 fn write_gitignore(root: &Path) -> Result<(), Error> {
     let path = root.join(".gitignore");
 
+    // Never write through a symlink planted here; a .gitignore that isn't a plain file is
+    // someone's own arrangement, so leave it alone.
+    if fs::symlink_metadata(&path).is_ok_and(|metadata| !metadata.is_file()) {
+        return Ok(());
+    }
     let r: Result<String, Error> = match fs::read_to_string(&path) {
         Ok(s) => Ok(s),
-        Err(ref e) if e.kind() == ErrorKind::NotFound => Ok("".to_string()),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok("".to_string()),
         Err(e) => Err(e.into()),
     };
     let gitignore = r?;
@@ -170,4 +210,65 @@ fn write_gitignore(root: &Path) -> Result<(), Error> {
 
 fn trust_file(root: &Path, fingerprint: String) -> PathBuf {
     root.join(format!(".trust-{}", fingerprint))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_signature_files_are_checked_not_trusted_blindly() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(loader::SHADOWENV_DIR_NAME);
+        fs::create_dir(&root).unwrap();
+        let signer = SigningKey::from_bytes(&[7; 32]);
+        let fingerprint = hex::encode(&signer.verifying_key().as_bytes()[0..4]);
+
+        assert!(!is_dir_trusted(&signer, &root).unwrap());
+        trust_dir(&signer, &root).unwrap();
+        assert!(is_dir_trusted(&signer, &root).unwrap());
+
+        // A malformed signature file (e.g. shipped in an untrusted checkout) means untrusted.
+        for junk in [&b"short"[..], &[0; 64][..], &[0; 65][..]] {
+            fs::write(trust_file(&root, fingerprint.clone()), junk).unwrap();
+            assert!(!is_dir_trusted(&signer, &root).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_trust_files_are_never_written_through_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(loader::SHADOWENV_DIR_NAME);
+        fs::create_dir(&root).unwrap();
+        let signer = SigningKey::from_bytes(&[7; 32]);
+        let fingerprint = hex::encode(&signer.verifying_key().as_bytes()[0..4]);
+        let signature = trust_file(&root, fingerprint);
+
+        // An unbounded or blocking "signature" must not hang the prompt.
+        symlink("/dev/zero", &signature).unwrap();
+        assert!(!is_dir_trusted(&signer, &root).unwrap());
+        fs::remove_file(&signature).unwrap();
+
+        // Trusting replaces a planted link instead of writing to its target.
+        let victim = dir.path().join("victim");
+        fs::write(&victim, "precious").unwrap();
+        symlink(&victim, &signature).unwrap();
+        trust_dir(&signer, &root).unwrap();
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
+        assert!(is_dir_trusted(&signer, &root).unwrap());
+
+        // A symlink to a real signature still counts, as it always has.
+        let elsewhere = dir.path().join("signature");
+        fs::rename(&signature, &elsewhere).unwrap();
+        symlink(&elsewhere, &signature).unwrap();
+        assert!(is_dir_trusted(&signer, &root).unwrap());
+
+        // A .gitignore that is a symlink is left alone, not written through.
+        fs::remove_file(root.join(".gitignore")).unwrap();
+        symlink(&victim, root.join(".gitignore")).unwrap();
+        trust_dir(&signer, &root).unwrap();
+        assert_eq!(fs::read_to_string(&victim).unwrap(), "precious");
+    }
 }

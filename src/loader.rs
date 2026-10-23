@@ -1,12 +1,21 @@
 use crate::hash::Source;
 use anyhow::Error;
 use std::{
-    fs, io, iter,
+    fs::{self, OpenOptions},
+    io::{self, ErrorKind, Read},
+    iter,
+    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
 };
 
 pub const SHADOWENV_DIR_NAME: &str = ".shadowenv.d";
 pub const SHADOWENV_PARENT_LINK_NAME: &str = "parent";
+
+/// Most bytes of `.lisp` source read from one `.shadowenv.d`. Real directories hold a few KiB;
+/// the limit keeps a hostile directory from making every prompt read gigabytes.
+const MAX_SOURCE_BYTES: usize = 1024 * 1024;
+/// Most `.lisp` files read from one `.shadowenv.d`.
+const MAX_SOURCE_FILES: usize = 256;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TraversalError {
@@ -155,18 +164,48 @@ fn resolve_shadowenv_parents(from_shadowenv: &PathBuf) -> Result<Vec<PathBuf>, T
 /// Note that this function assumes that the dirpath is trusted.
 pub fn load(dirpath: PathBuf) -> Result<Option<Source>, Error> {
     let mut source = Source::new(dirpath.parent().unwrap().to_string_lossy().to_string());
+    let mut remaining = MAX_SOURCE_BYTES;
 
-    for entry in fs::read_dir(dirpath)?.flatten() {
+    for entry in fs::read_dir(&dirpath)?.flatten() {
         let path = entry.path();
-        if path.is_file() {
-            // TODO: there HAS to be a better way to do this.
-            let basename = path.file_name().unwrap().to_string_lossy().to_string();
-            if !basename.ends_with(".lisp") {
-                continue;
-            }
-            let contents = fs::read_to_string(&path)?;
-            source.add_file(basename, contents);
+        // TODO: there HAS to be a better way to do this.
+        let basename = path.file_name().unwrap().to_string_lossy().to_string();
+        if !basename.ends_with(".lisp") {
+            continue;
         }
+        // Check the file that was opened, not the path: the entry can be swapped between a
+        // check and an open, and opening a FIFO without O_NONBLOCK would hang the prompt.
+        let file = match OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&path)
+        {
+            Ok(file) => file,
+            // A dangling symlink, or an entry removed since it was listed.
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        };
+        if !file.metadata()?.is_file() {
+            continue;
+        }
+        if source.files.len() == MAX_SOURCE_FILES {
+            return Err(anyhow::anyhow!(
+                "{} contains more than {MAX_SOURCE_FILES} .lisp files",
+                dirpath.display()
+            ));
+        }
+        let mut contents = String::new();
+        file.take(remaining as u64 + 1)
+            .read_to_string(&mut contents)?;
+        if contents.len() > remaining {
+            return Err(anyhow::anyhow!(
+                "the .lisp files in {} total more than {} KiB",
+                dirpath.display(),
+                MAX_SOURCE_BYTES / 1024
+            ));
+        }
+        remaining -= contents.len();
+        source.add_file(basename, contents);
     }
 
     if source.files.is_empty() {
@@ -467,5 +506,55 @@ mod tests {
         for dir in dirs {
             fs::create_dir_all(dir).unwrap();
         }
+    }
+
+    #[test]
+    fn test_load_limits_how_much_source_it_reads() {
+        let dir = tempdir().unwrap();
+        let shadowenv = dir.path().join(SHADOWENV_DIR_NAME);
+        fs::create_dir(&shadowenv).unwrap();
+        let half = "; ".to_string() + &"x".repeat(MAX_SOURCE_BYTES / 2);
+        fs::write(shadowenv.join("a.lisp"), &half).unwrap();
+        assert_eq!(load(shadowenv.clone()).unwrap().unwrap().files.len(), 1);
+        fs::write(shadowenv.join("b.lisp"), &half).unwrap();
+        assert!(load(shadowenv.clone()).is_err());
+
+        let many = dir.path().join("many").join(SHADOWENV_DIR_NAME);
+        fs::create_dir_all(&many).unwrap();
+        for i in 0..MAX_SOURCE_FILES {
+            fs::write(many.join(format!("{i}.lisp")), "").unwrap();
+        }
+        assert_eq!(
+            load(many.clone()).unwrap().unwrap().files.len(),
+            MAX_SOURCE_FILES
+        );
+        fs::write(many.join("one-more.lisp"), "").unwrap();
+        assert!(load(many).is_err());
+    }
+
+    #[test]
+    fn test_load_skips_lisp_entries_that_are_not_regular_files() {
+        use std::{ffi::CString, os::unix::ffi::OsStrExt, os::unix::fs::symlink};
+
+        let dir = tempdir().unwrap();
+        let shadowenv = dir.path().join(SHADOWENV_DIR_NAME);
+        fs::create_dir(&shadowenv).unwrap();
+        fs::write(shadowenv.join("real.lisp"), "(env/set \"A\" \"1\")").unwrap();
+        // Opening a FIFO for reading blocks until a writer appears, hanging the prompt.
+        let fifo = CString::new(shadowenv.join("fifo.lisp").as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o644) }, 0);
+        fs::create_dir(shadowenv.join("dir.lisp")).unwrap();
+        symlink("/nonexistent", shadowenv.join("dangling.lisp")).unwrap();
+        symlink(shadowenv.join("real.lisp"), shadowenv.join("link.lisp")).unwrap();
+
+        let mut names: Vec<_> = load(shadowenv)
+            .unwrap()
+            .unwrap()
+            .files
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        names.sort();
+        assert_eq!(names, ["link.lisp", "real.lisp"]);
     }
 }

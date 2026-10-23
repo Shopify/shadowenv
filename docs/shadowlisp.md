@@ -42,6 +42,22 @@ snippet that uses more features than most code will have to:
 
 The remainder of this page is API documentation. The bread and butter of Shadowlisp is [Environment Manipulation](#environment-manipulation). The rest of the functions will only be useful in support of manipulating environment variables.
 
+The functions and forms on this page are the entire language. A file that refers to any other name,
+other than one it bound itself with `let` or `when-let`, is rejected before any file runs.
+
+Values are strings (`"..."`, with the usual `\n`, `\t`, `\"`, `\\`, `\xHH`, and `\u{H...}` escapes),
+integers, the booleans `true` and `false`, lists, `()`, and the functions on this page. Conditions
+(in `if`, `when`, `cond`, and every operand of `and` and `or` but the last) must be booleans; test
+for `()` with `null`. Comments run from `;` to the end of the line, or between `#|` and `|#`.
+
+Programs are limited so that a mistaken or hostile one can't hang or exhaust your shell. A string or
+list a program builds holds at most 128 KiB (bytes, or elements counting those of nested lists);
+lists and expressions nest at most 64 deep; and each run has a fixed budget of work, far more than
+real programs use. A `.shadowenv.d` may hold at most 256 `.lisp` files totalling 1 MiB. A variable
+can't be set to a value containing NUL, 0x1E, or 0x1F, or one whose name and value together exceed
+128 KiB, the most an operating system passes to a program. Programs can't set `__shadowenv_data`:
+it is where shadowenv records what to undo.
+
 # Environment Manipulation
 
 ## `env/get`
@@ -202,7 +218,7 @@ remove any items from the pathlist which contain the provided value as a substri
 
 ```scheme
 (when-let ((root (env/get "RUBY_ROOT")))
-  (env/remove-from-pathlist (path-concat root "bin")))
+  (env/remove-from-pathlist "PATH" (path-concat root "bin")))
 ```
 
 It's occasionally useful to take a subdirectory of a path found from some other variable.
@@ -269,14 +285,14 @@ Multiple features with the same are allowed.
 `(when condition [ then ... ])`
 
 ```scheme
-(when (= 1 2) (env/set "NEVER" "happens")) ; ()
+(when (eq "a" "b") (env/set "NEVER" "happens")) ; ()
 ```
 
 `when` tests a condition, evaluating the rest of its forms if and only if the condition is true.
 
 | Argument | Type | Description |
 |---|---|---|
-| condition | `Expr` | If it evaluates to non-`()`, run *then* |
+| condition | `Bool` | If it evaluates to `true`, run *then* |
 | `:rest` then | `Expr` | Evaluated if *condition* was true |
 
 | Return Type | Description |
@@ -323,9 +339,9 @@ given branches, depending on the result. The "else" branch may be omitted,
 in which case, `if` will yield `()` when the condition is `false`.
 
 ```scheme
-(if (< a b)
-  a
-  b)
+(if (null (env/get "EDITOR"))
+  "vi"
+  (env/get "EDITOR"))
 ```
 
 ## `cond`
@@ -338,9 +354,9 @@ the last case, as a catch-all branch.
 
 ```scheme
 (cond
-  ((< n 0) 'negative)
-  ((> n 0) 'positive)
-  (else    'zero))
+  ((not (null (env/get "RBENV_ROOT"))) "rbenv")
+  ((not (null (env/get "RUBY_ROOT")))  "chruby")
+  (else                                "system"))
 ```
 
 ## `do`
@@ -348,10 +364,10 @@ the last case, as a catch-all branch.
 `(do [ expressions ... ])`
 
 ```scheme
-(let ((a b) (c d))
-  (do ; necessary in order to call both (f a) and (f c)
-    (f a)
-    (f c)))
+(let ((root "/opt/rubies/3.3.0"))
+  (do ; necessary in order to evaluate both forms
+    (env/set "RUBY_ROOT" root)
+    (env/prepend-to-pathlist "PATH" (path-concat root "bin"))))
 ```
 
 
@@ -372,13 +388,25 @@ for forms like `let`, which only accept one form to evaluate.
 
 `(eq a b)`
 
-Test whether two values are (weakly) equal. Shadowlisp does not support strict equality semantics.
+Test whether two values are (weakly) equal. Values of different types are never equal.
 
 ## `ne`
 
 `(ne a b)`
 
-Test whether two values are (weakly) unequal. Shadowlisp does not support strict equality semantics.
+Test whether two values are (weakly) unequal. Values of different types are always unequal.
+
+## `=`
+
+`(= a b)`
+
+```scheme
+(when (or (null (env/get "MANPATH")) (= "" (env/get "MANPATH")))
+  (env/set "MANPATH" ":"))
+```
+
+Test whether two values are (strictly) equal. Unlike `eq`, comparing values of different types
+(for example, a string with `()`) is an error.
 
 ## `not`
 
@@ -468,80 +496,10 @@ The `let` operator defines a series of local bindings for the duration of the
 execution of its body expression.
 
 ```scheme
-(let ((a 1)
-      (b 2))
-  (+ a b))
+(let ((root "/opt/rubies/3.3.0")
+      (bin (path-concat root "bin")))
+  (env/prepend-to-pathlist "PATH" bin))
 ```
 
+Bindings are evaluated in order, so each expression can refer to the names bound before it.
 
-<!--
-from ketos, but unsupported/irrelevant
-# define
-# apply
-# lambda
-# macro
-# new
-# =
-# second
-# slice
-# init
-# format
-# /=
-# xor
-# len
-# id
-# case
-# is-instance
-# reverse
-# .
-# .=
-# type-of
-# <
-# >
-# <=
-# >=
-# +
-# -
-# *
-# zero
-# max
-# min
-# struct
-# path
-# bytes
-# /
-# //
-# rem
-# <<
-# >>
-# bit&
-# bit|
-# bit^
-# bit!
-# is
-# panic
-# const
-# set-module-doc
-# string
-# print
-# println
-# eprint
-# eprintln
-# export
-# use
-# denom
-# fract
-# numer
-# rat
-# recip
-# abs
-# ceil
-# floor
-# round
-# trunc
-# int
-# chars
-# float
-# inf
-# nan
--->

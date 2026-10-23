@@ -2,9 +2,9 @@ use crate::{
     cli::HookCmd,
     get_current_dir_or_exit,
     hash::{Hash, SourceList},
-    lang::{self, ShadowLang},
+    lang::ShadowLang,
     loader, output,
-    shadowenv::{validate_var_name, Shadowenv},
+    shadowenv::{validate_var_name, validate_var_value, Shadowenv},
     trust::ensure_dir_tree_trusted,
     undo, unsafe_getppid,
 };
@@ -85,6 +85,26 @@ pub fn load_env(
     force: bool,
     clobber: bool,
 ) -> Result<Option<Shadowenv>, Error> {
+    // "targets" are sources of shadowenv lisp files
+    let targets = load_trusted_sources(pathbuf, false)?;
+    activate(
+        env::vars().collect(),
+        &shadowenv_data,
+        targets,
+        force,
+        clobber,
+    )
+}
+
+/// Computes the shadowenv for a prompt: undoes the previous activation recorded in
+/// `shadowenv_data`, then runs `targets`. Returns `None` if there is nothing to change.
+pub fn activate(
+    env: HashMap<String, String>,
+    shadowenv_data: &str,
+    targets: Option<SourceList>,
+    force: bool,
+    clobber: bool,
+) -> Result<Option<Shadowenv>, Error> {
     let mut parts = shadowenv_data.splitn(2, ":");
     let prev_hash = parts.next();
     let json_data = parts.next().unwrap_or("{}");
@@ -95,9 +115,6 @@ pub fn load_env(
         Some("0000000000000000") => None,
         Some(x) => Some(Hash::from_str(x)?),
     };
-
-    // "targets" are sources of shadowenv lisp files
-    let targets = load_trusted_sources(pathbuf, false)?;
 
     let targets_hash = targets.as_ref().and_then(|targets| targets.hash());
 
@@ -119,23 +136,13 @@ pub fn load_env(
     // "data" is used to undo changes made when activating a shadowenv
     // we will only have "data" if already inside a shadowenv
     let data = undo::Data::from_str(json_data)?;
-    let shadowenv = Shadowenv::new(
-        env::vars().collect(),
-        data,
-        targets_hash.unwrap_or(0),
-        clobber,
-    );
+    let shadowenv = Shadowenv::new(env, data, targets_hash.unwrap_or(0), clobber);
 
     match targets {
         Some(targets) => {
             // run_program takes in the shadowenv, evaluates the code we found on it, and returns it
-            match ShadowLang::run_programs(shadowenv, targets) {
-                // no need to return anything descriptive here since we already
-                // had ketos print it to stderr.
-                Err(_) => Err(lang::ShadowlispError {}.into()),
-                // note the "true" since we ran code to activate/modify the shadowenv
-                Ok(shadowenv) => Ok(Some(shadowenv)),
-            }
+            // note the "true" since we ran code to activate/modify the shadowenv
+            Ok(Some(ShadowLang::run_programs(shadowenv, targets)?))
         }
         // note the "false" since we didn't have anything to run
         None => Ok(Some(shadowenv)),
@@ -176,15 +183,18 @@ fn load_trusted_sources(
 
 pub fn mutate_own_env(shadowenv: &Shadowenv) -> Result<(), Error> {
     for (k, v) in shadowenv.exports()? {
-        // `env::set_var` panics on a name containing '=' or NUL. Names are
-        // rejected when a program assigns them, but a $__shadowenv_data written
-        // by an older version can still carry one, so skip rather than abort.
+        // `env::set_var` panics on a name containing '=' or NUL, or a value containing NUL.
+        // Both are rejected when a program assigns them, but a $__shadowenv_data written by an
+        // older version can still carry them, so skip rather than abort.
         if let Err(err) = validate_var_name(&k) {
             eprintln!("shadowenv: skipping variable: {}", err);
             continue;
         }
         match v {
-            Some(s) => env::set_var(k, &s),
+            Some(s) => match validate_var_value(&k, &s) {
+                Ok(()) => env::set_var(k, &s),
+                Err(err) => eprintln!("shadowenv: skipping variable: {}", err),
+            },
             None => env::remove_var(k),
         }
     }
@@ -225,11 +235,13 @@ fn write_exports<W: Write>(
     mode: VariableOutputMode,
 ) -> Result<(), Error> {
     match mode {
+        // Every command takes `--` before the name: a program can name a variable `-e`, and
+        // without it the shell would read that as an option (fish's `set -e` erases).
         VariableOutputMode::Posix => {
             for (k, v) in exports {
                 match v {
-                    Some(s) => writeln!(out, "export {}={}", shell_escape(k), shell_escape(s))?,
-                    None => writeln!(out, "unset {}", shell_escape(k))?,
+                    Some(s) => writeln!(out, "export -- {}={}", shell_escape(k), shell_escape(s))?,
+                    None => writeln!(out, "unset -- {}", shell_escape(k))?,
                 }
             }
         }
@@ -240,16 +252,16 @@ fn write_exports<W: Write>(
                         if k == "PATH" {
                             writeln!(
                                 out,
-                                "set -gx {} (string split : -- {})",
-                                shell_escape(k),
-                                shell_escape(s)
+                                "set -gx -- {} (string split : -- {})",
+                                fish_escape(k),
+                                fish_escape(s)
                             )?;
                         } else {
-                            writeln!(out, "set -gx {} {}", shell_escape(k), shell_escape(s))?;
+                            writeln!(out, "set -gx -- {} {}", fish_escape(k), fish_escape(s))?;
                         }
                     }
                     None => {
-                        writeln!(out, "set -e {}", shell_escape(k))?;
+                        writeln!(out, "set -e -- {}", fish_escape(k))?;
                     }
                 }
             }
@@ -297,6 +309,26 @@ fn write_exports<W: Write>(
 
 fn shell_escape(s: &str) -> String {
     shell::escape(Cow::from(s)).to_string()
+}
+
+/// Quotes `s` for fish. Inside fish's single quotes, `\'` and `\\` are escapes, which they
+/// aren't in POSIX shells, so POSIX quoting would let a value containing `\'` end the quotes
+/// early and run commands.
+fn fish_escape(s: &str) -> String {
+    let plain = |b: u8| b.is_ascii_alphanumeric() || b"_-./:@+,".contains(&b);
+    if !s.is_empty() && s.bytes().all(plain) {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for c in s.chars() {
+        if c == '\\' || c == '\'' {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('\'');
+    out
 }
 
 #[cfg(test)]
@@ -395,13 +427,20 @@ mod tests {
         // or a name carrying shell metacharacters is reinterpreted by the shell
         // that evaluates this output.
         let out = render(&[("TEST=AA; touch pwned.txt; #", Some("value"))], Posix);
-        assert_eq!(out, "export 'TEST=AA; touch pwned.txt; #'=value\n");
+        assert_eq!(out, "export -- 'TEST=AA; touch pwned.txt; #'=value\n");
 
         let out = render(&[("VAR$(command)", None)], Posix);
-        assert_eq!(out, "unset 'VAR$(command)'\n");
+        assert_eq!(out, "unset -- 'VAR$(command)'\n");
 
         let out = render(&[("VAR`command`", Some("v"))], Fish);
-        assert_eq!(out, "set -gx 'VAR`command`' v\n");
+        assert_eq!(out, "set -gx -- 'VAR`command`' v\n");
+
+        // A name that looks like an option is still a name: fish would read `set -gx -e v`
+        // as an erase, so every command ends option parsing before the name.
+        let out = render(&[("-e", None)], Fish);
+        assert_eq!(out, "set -e -- -e\n");
+        let out = render(&[("-U", Some("v"))], Fish);
+        assert_eq!(out, "set -gx -- -U v\n");
     }
 
     #[test]
@@ -459,7 +498,17 @@ mod tests {
         // Unusual but harmless: representable in every output mode.
         assert!(shadowenv.set("TEST; touch pwned.txt; #", Some("v")).is_ok());
 
-        for bad in ["AA\x1eBB", "AA\x1fBB", "TEST=AA", "AA\nBB", "AA\0BB", ""] {
+        // __shadowenv_data is shadowenv's own undo record: a program setting it could
+        // forge what deactivation restores.
+        for bad in [
+            "AA\x1eBB",
+            "AA\x1fBB",
+            "TEST=AA",
+            "AA\nBB",
+            "AA\0BB",
+            "",
+            "__shadowenv_data",
+        ] {
             assert!(
                 shadowenv.set(bad, Some("value")).is_err(),
                 "expected {:?} to be rejected",
@@ -486,8 +535,33 @@ mod tests {
         assert!(shadowenv
             .remove_from_pathlist_containing("AA\nBB", "/x")
             .is_err());
+        assert!(shadowenv
+            .prepend_to_pathlist("__shadowenv_data", "/x")
+            .is_err());
 
         assert!(shadowenv.append_to_pathlist("PATH", "/x").is_ok());
+    }
+
+    #[test]
+    fn test_fish_output_quotes_for_fish_not_posix() {
+        // Inside fish's single quotes, `\'` is an escaped quote. POSIX quoting of this value
+        // ('\'\''; echo INJECTED; #') closes the quotes early in fish and runs `echo INJECTED`.
+        assert_eq!(
+            render(
+                &[("GREETING", Some(r"\'; echo INJECTED; #"))],
+                VariableOutputMode::Fish
+            ),
+            "set -gx -- GREETING '\\\\\\'; echo INJECTED; #'\n"
+        );
+        for (value, quoted) in [
+            ("/usr/bin:/bin", "/usr/bin:/bin"),
+            ("", "''"),
+            ("a'b", r"'a\'b'"),
+            (r"a\b", r"'a\\b'"),
+            ("$HOME (echo x) *", "'$HOME (echo x) *'"),
+        ] {
+            assert_eq!(fish_escape(value), quoted, "{value:?}");
+        }
     }
 
     #[test]
