@@ -10,6 +10,8 @@ mod loader;
 mod output;
 mod prompt_widget;
 mod shadowenv;
+#[cfg(test)]
+mod simulation;
 mod trust;
 mod undo;
 
@@ -20,7 +22,10 @@ use std::{env, path::PathBuf, process};
 fn main() {
     use cli::ShadowenvApp::*;
 
-    let result = match cli::ShadowenvApp::parse() {
+    let app = cli::ShadowenvApp::parse();
+    // `hook` formats its own errors, already sanitized, with colors that must survive.
+    let preformatted = matches!(app, Hook(_));
+    let result = match app {
         Diff(cmd) => {
             diff::run(cmd);
             Ok(())
@@ -36,8 +41,13 @@ fn main() {
     };
 
     if let Err(err) = result {
-        if err.to_string() != "" {
-            eprintln!("{}", err);
+        let message = err.to_string();
+        if !message.is_empty() {
+            if preformatted {
+                eprintln!("{message}");
+            } else {
+                eprintln!("{}", output::sanitize_for_terminal(&message));
+            }
         }
 
         process::exit(1);

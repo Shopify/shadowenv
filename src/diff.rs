@@ -1,4 +1,4 @@
-use crate::{cli::DiffCmd, shadowenv::Shadowenv, undo};
+use crate::{cli::DiffCmd, output::sanitize_for_terminal, shadowenv::Shadowenv, undo};
 use std::{collections::BTreeMap, env};
 
 trait Logger {
@@ -70,20 +70,25 @@ fn run_with_logger(
 }
 
 fn diff_list(logger: &mut dyn Logger, list: &undo::List, current: &str, color: bool) {
-    let formatted_deletions: Vec<String> = if color {
-        list.deletions
-            .iter()
-            .map(|x| "\x1b[48;5;52m".to_string() + x + "\x1b[0;91m")
-            .collect()
-    } else {
-        list.deletions.clone()
-    };
+    let formatted_deletions: Vec<String> = list
+        .deletions
+        .iter()
+        .map(|x| {
+            let x = sanitize_for_terminal(x);
+            if color {
+                format!("\x1b[48;5;52m{x}\x1b[0;91m")
+            } else {
+                x.into_owned()
+            }
+        })
+        .collect();
     let mut prefix = formatted_deletions.join(":");
 
     let items = current
         .split(':')
-        .skip_while(|x| list.additions.contains(&x.to_string()));
-    let items: Vec<&str> = items.collect();
+        .skip_while(|x| list.additions.contains(&x.to_string()))
+        .map(sanitize_for_terminal);
+    let items: Vec<_> = items.collect();
     let suffix = items.join(":");
     if !suffix.is_empty() && !prefix.is_empty() {
         prefix += ":";
@@ -91,10 +96,11 @@ fn diff_list(logger: &mut dyn Logger, list: &undo::List, current: &str, color: b
     diff_remove(logger, &list.name, &(prefix + &suffix), color);
 
     let items = current.split(':').map(|x| {
+        let shown = sanitize_for_terminal(x);
         if list.additions.contains(&x.to_string()) && color {
-            "\x1b[48;5;22m".to_string() + x + "\x1b[0;92m"
+            format!("\x1b[48;5;22m{shown}\x1b[0;92m")
         } else {
-            x.to_string()
+            shown.into_owned()
         }
     });
     let items: Vec<String> = items.collect();
@@ -104,14 +110,16 @@ fn diff_list(logger: &mut dyn Logger, list: &undo::List, current: &str, color: b
 
 fn diff_scalar(logger: &mut dyn Logger, scalar: &undo::Scalar, color: bool) {
     if let Some(value) = &scalar.original {
-        diff_remove(logger, &scalar.name, value, color);
+        diff_remove(logger, &scalar.name, &sanitize_for_terminal(value), color);
     }
     if let Some(value) = &scalar.current {
-        diff_add(logger, &scalar.name, value, color);
+        diff_add(logger, &scalar.name, &sanitize_for_terminal(value), color);
     }
 }
 
+/// `value` must already be sanitized: list values arrive here with their own color codes.
 fn diff_add(logger: &mut dyn Logger, name: &str, value: &str, color: bool) {
+    let name = sanitize_for_terminal(name);
     if color {
         // Clearing to EOL with \x1b[K prevents a weird issue where a wrapped line uses the last
         // non-null background color for the newline character, filling the rest of the space in the
@@ -123,6 +131,7 @@ fn diff_add(logger: &mut dyn Logger, name: &str, value: &str, color: bool) {
 }
 
 fn diff_remove(logger: &mut dyn Logger, name: &str, value: &str, color: bool) {
+    let name = sanitize_for_terminal(name);
     if color {
         // Clearing to EOL with \x1b[K prevents a weird issue where a wrapped line uses the last
         // non-null background colour for the newline character, filling the rest of the space in the
@@ -134,7 +143,11 @@ fn diff_remove(logger: &mut dyn Logger, name: &str, value: &str, color: bool) {
 }
 
 fn print_verbose(logger: &mut dyn Logger, name: &str, value: &str) {
-    logger.print(format!("  {}={}", name, value))
+    logger.print(format!(
+        "  {}={}",
+        sanitize_for_terminal(name),
+        sanitize_for_terminal(value)
+    ))
 }
 
 #[cfg(test)]

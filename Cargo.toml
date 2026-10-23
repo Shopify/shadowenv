@@ -1,6 +1,6 @@
 [package]
 name = "shadowenv"
-version = "3.5.2"
+version = "3.6.0"
 authors = [
     "Shopify Engineering <careers@shopify.com>",
 ]
@@ -15,8 +15,6 @@ exec = "0.3.1"
 anyhow = "1.0.89"
 thiserror = "1.0.64"
 hex = "0.4.3"
-ketos = "0.12"
-ketos_derive = "0.12"
 libc = "0.2.48"
 path-clean = "1.0.1"
 regex = "1.11.0"

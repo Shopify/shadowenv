@@ -8,6 +8,24 @@ notably) share a single namespace.
 
 To express nil/null/no-value in Shadowlisp, use an empty list (). This will be important to clear environment variables.
 
+The functions and forms documented here are the entire language. A file that refers to any other name, other than
+one it bound itself with \fBlet\fR or \fBwhen-let\fR, is rejected before any file runs.
+
+Values are strings ("...", with the usual \e\fBn\fR, \e\fBt\fR, \e\fB"\fR, \e\e, \e\fBxHH\fR, and \e\fBu{H...}\fR
+escapes), integers, the booleans \fBtrue\fR and \fBfalse\fR, lists, \fB()\fR, and the functions documented here.
+Conditions (in \fBif\fR, \fBwhen\fR, \fBcond\fR, and every operand of \fBand\fR and \fBor\fR but the last) must be
+booleans; test for \fB()\fR with \fBnull\fR. Comments run from \fB;\fR to the end of the line, or between \fB#|\fR
+and \fB|#\fR.
+
+Programs are limited so that a mistaken or hostile one can't hang or exhaust your shell. A string or list a program
+builds holds at most 128 KiB (bytes, or elements counting those of nested lists); lists and expressions nest at most
+64 deep; and each run has a fixed budget of work, far more than real programs use. A \fB.shadowenv.d\fR may hold at
+most 256 \fB.lisp\fR files totalling 1 MiB. A variable can't be set to a value containing NUL, 0x1E, or 0x1F, or one
+whose name and value together exceed 128 KiB, the most an operating system passes to a program. Programs can't set
+\fB__shadowenv_data\fR: it is where shadowenv records what to undo, including the original value of every variable a
+program changes, and it is held to the same 128 KiB. If that record wouldn't fit, activation fails rather than leave a
+variable no command could be started with.
+
 
 .SH Environment Manipulation
 
@@ -187,7 +205,7 @@ Multiple features with the same are allowed.
 
 .TP
 \fBcondition\fR
-\fI(Expr)\fR If it evaluates to non-\fB()\fR, run *then*
+\fI(Bool)\fR If it evaluates to \fBtrue\fR, run *then*
 
 .TP
 \fI:rest \fBthen\fR
@@ -252,11 +270,16 @@ for forms like \fBlet\fR, which only accept one form to evaluate.
 
 .SS \fB(eq \fIa b\fB)\fR
 
-Test whether two values are (weakly) equal. Shadowlisp does not support strict equality semantics.
+Test whether two values are (weakly) equal. Values of different types are never equal.
 
 .SS \fB(ne \fIa b\fB)\fR
 
-Test whether two values are (weakly) unequal. Shadowlisp does not support strict equality semantics.
+Test whether two values are (weakly) unequal. Values of different types are always unequal.
+
+.SS \fB(= \fIa b\fB)\fR
+
+Test whether two values are (strictly) equal. Unlike \fBeq\fR, comparing values of different types (for example,
+a string with \fB()\fR) is an error.
 
 .SS \fB(not \fIa\fB)\fR
 
@@ -308,40 +331,11 @@ Returns true if and only if the provided argument is \fB()\fR.
 
 \fBlist\fR evaluates each of its arguments and return them as a list.
 
-.SH Functions and Macros
-
-.SS \fB(define \fIname expression\fB)\fR
-
-The \fBdefine\fR operator adds a value or compiled function to the global scope.
-
-When defining a function, if the keyword \fB:optional\fR is present in the argument
-list, all following arguments will be optional. If the keyword \fB:key\fR is present,
-all following arguments will be optional keyword arguments. If the keyword
-\fB:rest\fR is present, the following name will contain any free arguments remaining.
-
-Optional and keyword arguments may be omitted when calling a function.
-If an optional or keyword value is not supplied its value will be \fB()\fR.
-A default value can be given when the function is defined.
-
-.SS \fB(macro \fI(name [ arguments ... ]) expression\fB)\fR
-
-The \fBmacro\fR operator defines a compile-time macro. A macro behaves in all
-respects as any other function, except that it is executed at compile time
-and is expected to return code which is then further compiled.
-
-.SS \fB(lambda \fI( [ arguments ... ] ) expression\fB)\fR
-
-The \fBlambda\fR operator creates a function which may enclose one or more local
-value bindings from the surrounding scope.
-
-.SS \fB(apply \fIfunction [ arguments ... ] argument-list\fB)\fR
-
-The \fBapply\fR operator calls a function with a given series of arguments.
-The argument list consists of any positional arguments except for the last
-argument to \fBapply\fR, plus the final, required list argument, which is
-concatenated to positional arguments.
+.SH Variable Binding
 
 .SS \fB(let \fI( [ ( name expression ) ... ] ) body\fB)\fR
 
 The \fBlet\fR operator defines a series of local bindings for the duration of the
 execution of its body expression.
+
+Bindings are evaluated in order, so each expression can refer to the names bound before it.

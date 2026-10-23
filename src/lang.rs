@@ -1,328 +1,189 @@
+//! Shadowlisp: the small Lisp that `.shadowenv.d/*.lisp` programs are written in.
+//!
+//! The language is exactly what docs/shadowlisp.md and shadowlisp(5) describe. Programs are read
+//! ([`reader`]), resolved against the builtins ([`compile`]), and only then evaluated ([`eval`]),
+//! so a program that refers to anything else is rejected before any program runs.
+
+mod compile;
+mod eval;
+mod reader;
+
 use crate::{
-    hash::{Source, SourceList},
+    hash::{SourceFile, SourceList},
     shadowenv::Shadowenv,
 };
-use ketos::{Context, Error, FromValueRef, Name, Value};
-use ketos_derive::{ForeignValue, FromValueRef};
-use path_clean::PathClean;
-use std::{
-    cell::{Ref, RefCell},
-    env,
-    path::{Path, PathBuf},
-    rc::Rc,
-};
-use thiserror::Error;
+use std::{fmt, fs, path::PathBuf};
 
 pub struct ShadowLang {}
 
-#[derive(Debug, Error)]
-#[error("error while evaluating shadowlisp")]
-pub struct ShadowlispError;
-
-macro_rules! ketos_fn2 {
-    ( $scope:expr => $name:expr => fn $ident:ident
-            (...) -> $res:ty ) => {
-        $scope.add_value_with_name($name, |name| {
-            Value::new_foreign_fn(name, move |_scope, args| {
-                let res = $ident(args)?;
-                Ok(<$res as Into<Value>>::into(res))
-            })
-        })
-    };
+/// Byte offsets into a source file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
 }
 
-macro_rules! assert_args {
-    ( $args:expr , $count:expr , $name:expr ) => {
-        if $args.len() != $count {
-            return Err(From::from(ketos::exec::ExecError::ArityError {
-                name: Some($name),
-                expected: ketos::function::Arity::Exact($count as u32),
-                found: $args.len() as u32,
-            }));
+impl Span {
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+}
+
+/// An error at a position in the file being read, compiled, or run.
+#[derive(Debug)]
+pub struct Fault {
+    pub span: Span,
+    pub message: String,
+}
+
+impl Fault {
+    pub fn new(span: Span, message: impl Into<String>) -> Self {
+        Self {
+            span,
+            message: message.into(),
         }
-    };
-}
-
-#[derive(Debug, ForeignValue, FromValueRef)]
-// Sharing a value with Ketos means we can only access it through `&self`.
-// Mutation of values is possible through internally mutable containers,
-// such as `Cell` and `RefCell`.
-struct ShadowenvWrapper(RefCell<Shadowenv>);
-
-impl ShadowenvWrapper {
-    fn new(shadowenv: Shadowenv) -> Self {
-        Self(RefCell::new(shadowenv))
-    }
-    fn borrow_mut_env(&self) -> std::cell::RefMut<'_, Shadowenv> {
-        self.0.borrow_mut()
-    }
-    fn borrow_env(&self) -> Ref<'_, Shadowenv> {
-        self.0.borrow()
-    }
-
-    fn into_inner(self) -> Shadowenv {
-        self.0.into_inner()
     }
 }
 
-fn get_value(ctx: &Context, shadowenv_name: Name) -> Value {
-    ctx.scope()
-        .get_constant(shadowenv_name)
-        .expect("bug: shadowenv not defined")
+/// A Shadowlisp error, located in the file that caused it.
+#[derive(Debug)]
+pub struct Error {
+    file: String,
+    line: usize,
+    column: usize,
+    /// The offending line, or the part of it around the error.
+    excerpt: String,
+    /// Characters of `excerpt` before the error.
+    caret: usize,
+    underline: usize,
+    message: String,
+    /// Whether the file failed to parse, as opposed to compile or run.
+    syntax: bool,
 }
 
-fn path_concat(vals: &mut [Value]) -> Result<String, Error> {
-    let res = vals.iter().fold(
-        PathBuf::new(),
-        |acc, v| acc.join(<&str as FromValueRef>::from_value_ref(v).unwrap()), // TODO(burke): don't unwrap
-    );
+/// Most characters of the offending line quoted in an error; source lines can be up to the
+/// loader's whole size limit long.
+const EXCERPT_CHARS: usize = 120;
 
-    Ok(res.clean().to_string_lossy().to_string())
+impl Error {
+    fn new(file: &SourceFile, fault: Fault, syntax: bool) -> Self {
+        let src = &file.contents;
+        let line_of = |pos: usize| src[..pos].rfind('\n').map_or(0, |i| i + 1);
+        let start = fault.span.start.min(src.len());
+        let line_start = line_of(start);
+        let line_end = src[start..].find('\n').map_or(src.len(), |i| start + i);
+        let source_line = src[line_start..line_end].trim_end_matches('\r');
+        // The error's start sits on this line; if it is on a trailing '\r', treat it as the
+        // line's end. `end` stays within the line and never before `start`.
+        let start = start.min(line_start + source_line.len());
+        let end = fault
+            .span
+            .end
+            .max(start)
+            .min(line_start + source_line.len());
+        let column = src[line_start..start].chars().count();
+        let line_len = source_line.chars().count();
+        let (skip, take) = if line_len <= EXCERPT_CHARS {
+            (0, line_len)
+        } else {
+            let skip = column
+                .saturating_sub(EXCERPT_CHARS / 3)
+                .min(line_len - EXCERPT_CHARS);
+            (skip, EXCERPT_CHARS)
+        };
+        let mut excerpt: String = source_line.chars().skip(skip).take(take).collect();
+        let mut caret = column - skip;
+        let underline = src[start..end]
+            .chars()
+            .count()
+            .min(take.saturating_sub(caret))
+            .max(1);
+        if skip > 0 {
+            excerpt.insert(0, '…');
+            caret += 1;
+        }
+        if skip + take < line_len {
+            excerpt.push('…');
+        }
+
+        Self {
+            file: file.name.clone(),
+            line: src[..line_start].matches('\n').count() + 1,
+            column: column + 1,
+            excerpt,
+            caret,
+            underline,
+            message: fault.message,
+            syntax,
+        }
+    }
+
+    /// The error's location, message and the offending line, without the closing summary.
+    ///
+    /// A syntax error's first line starts with the file name, `NNN_name.lisp:line:column:`, as
+    /// it did under Ketos; other errors start with `error in`. dev matches that prefix on stderr
+    /// to recognize a dev-generated file that doesn't parse and move it out of the way, and it
+    /// must not do that for a file that parses but fails to run.
+    pub fn detail(&self) -> String {
+        let indent: String = self
+            .excerpt
+            .chars()
+            .take(self.caret)
+            .map(|c| if c == '\t' { '\t' } else { ' ' })
+            .collect();
+        let prefix = if self.syntax { "" } else { "error in " };
+        format!(
+            "{prefix}{}:{}:{}: {}\n    {}\n    {indent}^{}",
+            self.file,
+            self.line,
+            self.column,
+            self.message,
+            self.excerpt,
+            "~".repeat(self.underline - 1)
+        )
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", self.detail())?;
+        f.write_str("error while evaluating shadowlisp")
+    }
 }
 
 impl ShadowLang {
-    pub fn run_programs(shadowenv: Shadowenv, sources: SourceList) -> Result<Shadowenv, Error> {
-        let wrapper = Rc::new(ShadowenvWrapper::new(shadowenv));
+    pub fn run_programs(mut shadowenv: Shadowenv, sources: SourceList) -> Result<Shadowenv, Error> {
         let dirs = sources.shortened_dirs();
+
+        let mut programs = Vec::new();
         for source in sources.consume() {
-            Self::run(&wrapper, source)?;
-        }
-        let mut result = Rc::try_unwrap(wrapper).unwrap().into_inner();
-        result.add_dirs(dirs);
-        Ok(result)
-    }
-
-    fn run(rc_wrapper: &Rc<ShadowenvWrapper>, source: Source) -> Result<(), Error> {
-        let mut restrictions = ketos::RestrictConfig::strict();
-        // "Maximum size of value stack, in values"
-        // This also puts a cap on the size of string literals in a single function invocation.
-        // The default limit of 256 then means a limit of 256 bytes of string per invocation.
-        // We'll increase this to 8k, in case people want to embed an RSA cert or something (don't
-        // construe this as an endorsement of that plan).
-        restrictions.memory_limit = 65536;
-
-        let interp = ketos::Builder::new()
-            .restrict(restrictions)
-            .io(Rc::new(ketos::GlobalIo::null())) // no printing
-            .module_loader(Box::new(ketos::module::NullModuleLoader)) // nerf code loading
-            .finish();
-
-        let shadowenv_name = interp.scope().add_name("shadowenv");
-
-        interp
-            .scope()
-            .add_constant(shadowenv_name, Value::Foreign(rc_wrapper.clone()));
-
-        ketos_fn2! { interp.scope() => "path-concat" =>
-        fn path_concat(...) -> String }
-
-        interp.scope().add_value_with_name("env/get", |name| {
-            Value::new_foreign_fn(name, move |ctx, args| {
-                assert_args!(args, 1, name);
-
-                let value = get_value(ctx, shadowenv_name);
-                let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-
-                let result = wrapper
-                    .borrow_env()
-                    .get(name)
-                    .map(<String as Into<Value>>::into)
-                    .unwrap_or(Value::Unit);
-                Ok(result)
-            })
-        });
-
-        interp.scope().add_value_with_name("env/set", |name| {
-            Value::new_foreign_fn(name, move |ctx, args| {
-                assert_args!(args, 2, name);
-
-                let value = get_value(ctx, shadowenv_name);
-                let shadowenv = <&ShadowenvWrapper as FromValueRef>::from_value_ref(&value)?;
-                let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                let value = <&str as FromValueRef>::from_value_ref(&args[1]).ok();
-
-                shadowenv
-                    .borrow_mut_env()
-                    .set(name, value)
-                    .map_err(ketos::Error::custom)?;
-                Ok(Value::Unit)
-            })
-        });
-
-        interp
-            .scope()
-            .add_value_with_name("env/append-to-pathlist", |name| {
-                Value::new_foreign_fn(name, move |ctx, args| {
-                    assert_args!(args, 2, name);
-
-                    let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
-
-                    wrapper
-                        .borrow_mut_env()
-                        .append_to_pathlist(name, value)
-                        .map_err(ketos::Error::custom)?;
-                    Ok(Value::Unit)
-                })
-            });
-
-        interp
-            .scope()
-            .add_value_with_name("env/prepend-to-pathlist", |name| {
-                Value::new_foreign_fn(name, move |ctx, args| {
-                    assert_args!(args, 2, name);
-
-                    let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
-
-                    wrapper
-                        .borrow_mut_env()
-                        .prepend_to_pathlist(name, value)
-                        .map_err(ketos::Error::custom)?;
-                    Ok(Value::Unit)
-                })
-            });
-
-        interp
-            .scope()
-            .add_value_with_name("env/remove-from-pathlist", |name| {
-                Value::new_foreign_fn(name, move |ctx, args| {
-                    assert_args!(args, 2, name);
-
-                    let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
-
-                    wrapper
-                        .borrow_mut_env()
-                        .remove_from_pathlist(name, value)
-                        .map_err(ketos::Error::custom)?;
-                    Ok(Value::Unit)
-                })
-            });
-
-        interp
-            .scope()
-            .add_value_with_name("env/remove-from-pathlist-containing", |name| {
-                Value::new_foreign_fn(name, move |ctx, args| {
-                    assert_args!(args, 2, name);
-
-                    let value = get_value(ctx, shadowenv_name);
-                    let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-                    let name = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                    let value = <&str as FromValueRef>::from_value_ref(&args[1])?;
-
-                    wrapper
-                        .borrow_mut_env()
-                        .remove_from_pathlist_containing(name, value)
-                        .map_err(ketos::Error::custom)?;
-                    Ok(Value::Unit)
-                })
-            });
-
-        interp.scope().add_value_with_name("provide", |name| {
-            Value::new_foreign_fn(name, move |ctx, args| {
-                let value = get_value(ctx, shadowenv_name);
-                let wrapper: &ShadowenvWrapper = FromValueRef::from_value_ref(&value)?;
-
-                let version = match args.len() {
-                    1 => None,
-                    2 => Some(<&str as FromValueRef>::from_value_ref(&args[1])?),
-                    _ => {
-                        return Err(From::from(ketos::exec::ExecError::ArityError {
-                            name: Some(name),
-                            expected: ketos::function::Arity::Range(1, 2),
-                            found: args.len() as u32,
-                        }));
-                    }
-                };
-                let feature = <&str as FromValueRef>::from_value_ref(&args[0])?;
-
-                wrapper.borrow_mut_env().add_feature(feature, version);
-                Ok(Value::Unit)
-            })
-        });
-
-        interp.scope().add_value_with_name("expand-path", |name| {
-            Value::new_foreign_fn(name, move |_ctx, args| {
-                assert_args!(args, 1, name);
-                let path = <&str as FromValueRef>::from_value_ref(&args[0])?;
-                let expanded = shellexpand::tilde(path);
-                let absolutized = match std::path::absolute(expanded.to_string()) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        return Err(From::from(ketos::io::IoError {
-                            err: e,
-                            path: PathBuf::from(path),
-                            mode: ketos::io::IoMode::Read,
-                        }));
-                    }
-                };
-                let cleaned = absolutized.clean();
-                Ok(<String as Into<Value>>::into(
-                    cleaned.to_string_lossy().to_string(),
-                ))
-            })
-        });
-
-        let prelude = r#"
-          ;; Better when/if/let macros
-          (macro (when pred :rest body) `(if ,pred (do ,@body) ()))
-          (macro (when-let assigns :rest body)
-            `(let ,assigns (when (not (null ,(first (first assigns)))) ,@body)))
-        "#;
-
-        if let Err(err) = interp.run_code(prelude, None) {
-            interp.display_error(&err);
-            if let Some(trace) = interp.get_traceback() {
-                eprintln!();
-                interp.display_trace(&trace);
+            // `expand-path` resolves relative paths against the directory containing the
+            // `.shadowenv.d`, as the physical path (matching what `getcwd` reported when Ketos
+            // evaluated programs with that directory as the working directory).
+            let dir = fs::canonicalize(&source.dir).unwrap_or_else(|_| PathBuf::from(&source.dir));
+            let mut files = source.files;
+            files.sort();
+            for file in files {
+                let program = reader::read(&file.contents)
+                    .map_err(|fault| Error::new(&file, fault, true))
+                    .and_then(|exprs| {
+                        compile::compile(&exprs).map_err(|fault| Error::new(&file, fault, false))
+                    })?;
+                programs.push((dir.clone(), file, program));
             }
-            return Err(err);
-        };
-
-        let mut files = source.files.clone();
-        files.sort();
-        let original_path = env::current_dir();
-        let _ = env::set_current_dir(Path::new(&source.dir));
-
-        for source_file in &files {
-            let fname = format!("__shadowenv__{}", source_file.name);
-            let prog = format!("(define ({} env) (do {}))", fname, source_file.contents);
-
-            // TODO: error type?
-            if let Err(err) = interp.run_code(&prog, Some(source_file.name.to_string())) {
-                interp.display_error(&err);
-                if let Some(trace) = interp.get_traceback() {
-                    eprintln!();
-                    interp.display_trace(&trace);
-                }
-                return Err(err);
-            };
         }
 
-        for source_file in &files {
-            let fname = format!("__shadowenv__{}", source_file.name);
-            if let Err(err) = interp.call(&fname, vec![Value::Foreign(rc_wrapper.clone())]) {
-                // TODO: error type?
-                interp.display_error(&err);
-                if let Some(trace) = interp.get_traceback() {
-                    eprintln!();
-                    interp.display_trace(&trace);
-                }
-                return Err(err);
-            };
+        let mut machine = eval::Machine::new(&mut shadowenv);
+        for (dir, file, program) in &programs {
+            machine
+                .run(program, dir)
+                .map_err(|fault| Error::new(file, fault, false))?;
         }
-        if let Ok(dir) = original_path {
-            let _ = env::set_current_dir(dir);
-        }
-        Ok(())
+
+        shadowenv.add_dirs(dirs);
+        Ok(shadowenv)
     }
 }
 
@@ -330,15 +191,19 @@ impl ShadowLang {
 mod tests {
     use super::*;
     use crate::features::Feature;
-    use crate::hash::SourceFile;
+    use crate::hash::Source;
     use crate::undo::Data;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeMap, HashMap, HashSet};
 
     fn build_source(content: &str) -> Source {
+        build_source_named("file.lisp", content)
+    }
+
+    fn build_source_named(name: &str, content: &str) -> Source {
         Source {
             dir: "dir".to_string(),
             files: vec![SourceFile {
-                name: "file.lisp".to_string(),
+                name: name.to_string(),
                 contents: content.to_string(),
             }],
         }
@@ -350,6 +215,20 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect::<HashMap<_, _>>();
         Shadowenv::new(env, Data::new(), 0, false)
+    }
+
+    fn run(program: &str) -> Result<Shadowenv, Error> {
+        ShadowLang::run_programs(
+            build_shadow_env(vec![("PRESET", "p")]),
+            SourceList::new_with_sources(vec![build_source(program)]),
+        )
+    }
+
+    /// Runs `(env/set "RESULT" <expr>)` and returns the resulting value of `RESULT`.
+    fn result_of(expr: &str) -> Result<Option<String>, String> {
+        run(&format!(r#"(env/set "RESULT" {expr})"#))
+            .map(|env| env.get("RESULT"))
+            .map_err(|err| err.message)
     }
 
     #[test]
@@ -380,25 +259,14 @@ mod tests {
             r#"(env/set "TEST=AA" "v")"#,
             r#"(env/append-to-pathlist "AA\x1eBB" "/x")"#,
         ] {
-            let shadowenv = build_shadow_env(vec![]);
-            let result = ShadowLang::run_programs(
-                shadowenv,
-                SourceList::new_with_sources(vec![build_source(bad)]),
-            );
-            assert!(result.is_err(), "expected {} to be rejected", bad);
+            assert!(run(bad).is_err(), "expected {} to be rejected", bad);
         }
     }
 
     #[test]
     fn test_env_set_still_allows_unusual_but_representable_names() {
-        let shadowenv = build_shadow_env(vec![]);
-        let source = build_source(r#"(env/set "weird.name-with$stuff" "42")"#);
-
-        let result =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]));
-        let env = result.unwrap().exports().unwrap();
-
-        assert_eq!(env["weird.name-with$stuff"].as_ref().unwrap(), "42");
+        let env = run(r#"(env/set "weird.name-with$stuff" "42")"#).unwrap();
+        assert_eq!(env.get("weird.name-with$stuff").as_deref(), Some("42"));
     }
 
     #[test]
@@ -453,35 +321,46 @@ mod tests {
 
     #[test]
     fn test_features() {
-        let shadowenv = build_shadow_env(vec![]);
-
-        let source = build_source(
-            r#"
-                (provide "ruby" "3.1.2")
-            "#,
-        );
-
-        let shadowenv =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
-                .unwrap();
-        let expected = HashSet::from([Feature::new("ruby".to_string(), Some("3.1.2".to_string()))]);
+        let shadowenv = run(r#"(provide "ruby" "3.1.2") (provide "rust")"#).unwrap();
+        let expected = HashSet::from([
+            Feature::new("ruby".to_string(), Some("3.1.2".to_string())),
+            Feature::new("rust".to_string(), None),
+        ]);
         assert_eq!(shadowenv.features(), expected);
     }
 
     #[test]
     fn test_expand_path() {
-        let shadowenv = build_shadow_env(vec![]);
-
-        let source = build_source(
-            r#"
-                (env/set "EXPANDED" (expand-path "~"))
-            "#,
-        );
         let home = dirs::home_dir().map(|p| p.into_os_string().into_string().unwrap());
-        let shadowenv =
-            ShadowLang::run_programs(shadowenv, SourceList::new_with_sources(vec![source]))
-                .unwrap();
+        let shadowenv = run(r#"(env/set "EXPANDED" (expand-path "~"))"#).unwrap();
         assert_eq!(shadowenv.get("EXPANDED"), home);
+    }
+
+    #[test]
+    fn test_expand_path_resolves_relative_to_the_shadowenv_parent_physically() {
+        let root = tempfile::tempdir().unwrap();
+        let real = root.path().join("real");
+        std::fs::create_dir(&real).unwrap();
+        let link = root.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+
+        let source = Source {
+            dir: link.to_string_lossy().into_owned(),
+            files: vec![SourceFile {
+                name: "file.lisp".to_string(),
+                contents: r#"(env/set "BIN" (expand-path "./bin/../sbin"))"#.to_string(),
+            }],
+        };
+        let shadowenv = ShadowLang::run_programs(
+            build_shadow_env(vec![]),
+            SourceList::new_with_sources(vec![source]),
+        )
+        .unwrap();
+        let expected = std::fs::canonicalize(&real).unwrap().join("sbin");
+        assert_eq!(
+            shadowenv.get("BIN"),
+            Some(expected.to_string_lossy().into_owned())
+        );
     }
 
     #[test]
@@ -507,5 +386,490 @@ mod tests {
         )
         .unwrap();
         assert_eq!(shadowenv.get("TEST"), Some("TWO".to_string()));
+    }
+
+    #[test]
+    fn test_every_documented_form_runs() {
+        let shadowenv = run(r#"
+            (env/set "A" "1")
+            (let ((items (append (list "x" "y") "z")))
+              (do
+                (env/set "JOINED" (join ":" (first items) (elt items 1) (last items)))
+                (env/set "TAIL" (first (tail (concat items (list "w")))))))
+            (when (and (eq (env/get "A") "1") (ne (env/get "A") "2") (not (null (env/get "A"))))
+              (env/set "WHEN" "yes"))
+            (when-let ((a (env/get "A")))
+              (env/set "WHEN_LET" a))
+            (env/set "IF" (if (or (null (env/get "MISSING")) false) "then" "else"))
+            (env/set "COND" (cond ((not (null (env/get "MISSING"))) "missing") (else "fallback")))
+            (env/prepend-to-pathlist "P" "/b")
+            (env/prepend-to-pathlist "P" "/a")
+            (env/append-to-pathlist "P" "/c")
+            (env/prepend-to-pathlist "P" "/rvm/bin")
+            (env/remove-from-pathlist "P" "/b")
+            (env/remove-from-pathlist-containing "P" "rvm")
+            (env/set "CONCAT" (path-concat "/a" "b"))
+            (env/set "EXPAND" (expand-path "/a/../b"))
+            (provide "thing" "1.0")
+            "#)
+        .unwrap();
+        for (name, value) in [
+            ("JOINED", "x:y:z"),
+            ("TAIL", "y"),
+            ("WHEN", "yes"),
+            ("WHEN_LET", "1"),
+            ("IF", "then"),
+            ("COND", "fallback"),
+            ("P", "/a:/c"),
+            ("CONCAT", "/a/b"),
+            ("EXPAND", "/b"),
+        ] {
+            assert_eq!(shadowenv.get(name).as_deref(), Some(value), "{name}");
+        }
+    }
+
+    #[test]
+    fn test_values_match_ketos() {
+        for (expr, expected) in [
+            // `and`/`or` return their last operand as is.
+            (r#"(and true "last")"#, Some("last")),
+            (r#"(or false "last")"#, Some("last")),
+            (r#"(if (and) "t" "f")"#, Some("t")),
+            (r#"(if (or) "t" "f")"#, Some("f")),
+            // `eq`/`ne` compare structurally; values of different types are unequal.
+            (
+                r#"(if (eq (list "a" (list "b")) (list "a" (list "b"))) "t" "f")"#,
+                Some("t"),
+            ),
+            (r#"(if (eq "a" ()) "t" "f")"#, Some("f")),
+            (r#"(if (eq "a" "a" "b") "t" "f")"#, Some("f")),
+            (r#"(if (ne "a" "b" "c") "t" "f")"#, Some("t")),
+            (r#"(if (ne "a" "b" "a") "t" "f")"#, Some("f")),
+            // Ketos's own functions compare by identity; shadowenv's compare with nothing.
+            (r#"(if (eq list list) "t" "f")"#, Some("t")),
+            (r#"(if (eq env/set env/set) "t" "f")"#, Some("f")),
+            (r#"(if (ne env/set env/set) "t" "f")"#, Some("t")),
+            // `=` is strict: equal only if every value matches the first.
+            (r#"(if (= "" "") "t" "f")"#, Some("t")),
+            (r#"(if (= "a" "a" "b") "t" "f")"#, Some("f")),
+            (r#"(if (= (list 1 "a") (list 1 "a")) "t" "f")"#, Some("t")),
+            (r#"(if (= "a" "b" ()) "t" "f")"#, Some("f")),
+            // Strings concatenate and join; so do lists.
+            (r#"(concat "a" "b" "c")"#, Some("abc")),
+            (r#"(join "" "a" "b")"#, Some("ab")),
+            (r#"(join "-")"#, Some("")),
+            (
+                r#"(first (join (list "-") (list "a") (list "b")))"#,
+                Some("a"),
+            ),
+            (
+                r#"(elt (join (list "-") (list "a") (list "b")) 1)"#,
+                Some("-"),
+            ),
+            (r#"(first (concat () (list "x")))"#, Some("x")),
+            // A single value concatenates to itself.
+            (r#"(join "" ())"#, None),
+            (r#"(tail (list "only"))"#, None),
+            (r#"(path-concat)"#, Some(".")),
+            (r#"(path-concat "/a/" "./b" "../c")"#, Some("/a/c")),
+            (r#"(cond ((eq 1 2) "no"))"#, None),
+            (r#"(when false "no")"#, None),
+            (r#"(do)"#, None),
+            // Arity is checked when a call runs, so a mistake in an untaken branch is harmless.
+            (
+                r#"(if false (env/remove-from-pathlist "PATH") "ok")"#,
+                Some("ok"),
+            ),
+            // Locals shadow builtins and special forms; builtins are values.
+            (r#"(let ((list "shadowed")) list)"#, Some("shadowed")),
+            (r#"(let ((if "shadowed")) if)"#, Some("shadowed")),
+            (r#"(let ((f env/get)) (f "PRESET"))"#, Some("p")),
+            (r#"(let ((a "1") (b (concat a "2"))) b)"#, Some("12")),
+            (
+                r#"(let ((a "outer")) (let ((a "inner")) a))"#,
+                Some("inner"),
+            ),
+            // `when-let` runs its body only if the first binding is non-`()`.
+            (r#"(when-let ((a (env/get "PRESET")) (b ())) a)"#, Some("p")),
+            (r#"(when-let ((a ()) (b "x")) b)"#, None),
+            // The first binding's *name* decides, so a later binding of the same name wins.
+            (r#"(when-let ((a "x") (a ())) "ran")"#, None),
+            (r#"(when-let ((a ()) (a "y")) a)"#, Some("y")),
+            // `else` is the catch-all even when bound locally.
+            (r#"(let ((else false)) (cond (else "else")))"#, Some("else")),
+        ] {
+            assert_eq!(result_of(expr), Ok(expected.map(String::from)), "{expr}");
+        }
+    }
+
+    #[test]
+    fn test_errors_match_ketos() {
+        for (expr, expected) in [
+            // Conditions must be booleans.
+            (
+                r#"(if "x" "t" "f")"#,
+                "type error: expected bool; found string: \"x\"",
+            ),
+            (
+                r#"(when () "t")"#,
+                "type error: expected bool; found (): ()",
+            ),
+            (
+                r#"(and "x" true)"#,
+                "type error: expected bool; found string: \"x\"",
+            ),
+            (r#"(not ())"#, "type error: expected bool; found (): ()"),
+            // Comparing values of different types with `=` is an error.
+            (
+                r#"(= "" ())"#,
+                "type error: cannot compare string: \"\" with (): ()",
+            ),
+            (r#"(first ())"#, "type error: expected list; found (): ()"),
+            (
+                r#"(elt (list "a") 1)"#,
+                "index 1 is out of bounds for a list of 1",
+            ),
+            (
+                r#"(elt (list "a") -1)"#,
+                "type error: expected non-negative integer; found integer: -1",
+            ),
+            (
+                r#"(concat () "x")"#,
+                "type error: expected list; found string: \"x\"",
+            ),
+            (
+                r#"(env/get "A" "B")"#,
+                "`env/get` expects 1 argument; found 2",
+            ),
+            (
+                r#"(provide "x" 1)"#,
+                "type error: expected string; found integer: 1",
+            ),
+            (
+                r#"(let ((f env/get)) (f))"#,
+                "`env/get` expects 1 argument; found 0",
+            ),
+            (
+                r#"(let ((f "not a function")) (f))"#,
+                "type error: expected function; found string: \"not a function\"",
+            ),
+            (
+                r#"(expand-path "")"#,
+                "cannot expand \"\": cannot make an empty path absolute",
+            ),
+            (
+                r#"(when false ("literal" 1))"#,
+                "invalid call: expected a function name or expression",
+            ),
+        ] {
+            assert_eq!(result_of(expr), Err(expected.to_string()), "{expr}");
+        }
+    }
+
+    #[test]
+    fn test_rejects_what_ketos_accepted_but_shadowlisp_does_not_document() {
+        for (expr, expected) in [
+            // Ketos silently unset the variable for any non-string value.
+            ("1", "type error: expected string or (); found integer: 1"),
+            // Ketos returned a character, which Shadowlisp has no type for.
+            (
+                r#"(first "abc")"#,
+                "type error: expected list; found string: \"abc\"",
+            ),
+            // Ketos panicked.
+            (
+                r#"(path-concat "a" 1)"#,
+                "type error: expected string; found integer: 1",
+            ),
+        ] {
+            assert_eq!(result_of(expr), Err(expected.to_string()), "{expr}");
+        }
+    }
+
+    #[test]
+    fn test_accepts_what_ketos_rejected() {
+        // Ketos failed on an empty file, on a comment-only final line without a newline, and on
+        // `;;` comments before anything but a definition.
+        for program in [
+            "",
+            "; comment",
+            ";; comment\n(env/set \"A\" \"1\")",
+            "(when true)",
+        ] {
+            run(program).unwrap_or_else(|err| panic!("{program:?}: {err}"));
+        }
+    }
+
+    #[test]
+    fn test_rejects_undocumented_names_before_running_anything() {
+        for (name, program) in [
+            ("format", r#"(env/set "A" (format "{}" 1))"#),
+            ("define", "(define x 1)"),
+            ("lambda", r#"(env/set "A" ((lambda () "x")))"#),
+            ("env", r#"(env/set "A" env)"#),
+            ("shadowenv", r#"(env/get shadowenv)"#),
+        ] {
+            assert_eq!(
+                result_of(&format!("(do {program})")).unwrap_err(),
+                format!("`{name}` is not defined; Shadowlisp only provides the functions documented in shadowlisp(5)"),
+            );
+        }
+        assert_eq!(
+            result_of("if").unwrap_err(),
+            "`if` is a special form and cannot be used as a value"
+        );
+
+        // A later file's undefined name prevents an earlier file from running at all.
+        let mut good = build_source_named("100_good.lisp", r#"(env/set "A" "1")"#);
+        good.files.push(SourceFile {
+            name: "200_bad.lisp".to_string(),
+            contents: "(print 1)".to_string(),
+        });
+        let err = ShadowLang::run_programs(
+            build_shadow_env(vec![]),
+            SourceList::new_with_sources(vec![good]),
+        )
+        .unwrap_err();
+        assert_eq!(err.file, "200_bad.lisp");
+    }
+
+    #[test]
+    fn test_rejects_malformed_forms() {
+        for (expr, expected) in [
+            ("(if true)", "malformed `if`: expected `(if condition then-case [ else-case ])`"),
+            ("(let ((a \"1\")) a a)", "malformed `let`: expected `(let ((name expression) ...) body)`; wrap multiple body forms in `do`"),
+            ("(let ((\"a\" \"1\")) ())", "malformed `let` binding: expected `(name expression)`"),
+            ("(when-let () \"x\")", "malformed `when-let`: expected `(when-let ((name expression) ...) [ body ... ])`"),
+            ("(cond (else \"a\") (true \"b\"))", "`else` must be the last `cond` clause"),
+            ("(cond (true))", "malformed `cond` clause: expected `(predicate branch)`"),
+            ("(do (let ((a \"1\")) ()) a)", "`a` is not defined; Shadowlisp only provides the functions documented in shadowlisp(5)"),
+        ] {
+            assert_eq!(result_of(expr).unwrap_err(), expected, "{expr}");
+        }
+    }
+
+    #[test]
+    fn test_error_display_points_at_the_source() {
+        let err = ShadowLang::run_programs(
+            build_shadow_env(vec![]),
+            SourceList::new_with_sources(vec![build_source_named(
+                "500_ruby.lisp",
+                "(provide \"ruby\")\n  (env/set \"A\" (format \"x\"))\n",
+            )]),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "error in 500_ruby.lisp:2:17: `format` is not defined; Shadowlisp only provides the functions documented in shadowlisp(5)\n\
+             \x20     (env/set \"A\" (format \"x\"))\n\
+             \x20                   ^~~~~~\n\
+             error while evaluating shadowlisp"
+        );
+    }
+
+    #[test]
+    fn test_only_syntax_errors_start_with_the_file_name() {
+        // dev matches /\A(\d+_dev_\w+\.lisp):/ on stderr and moves a matching file aside as
+        // one it generated broken. Under Ketos only a file that failed to parse produced that
+        // prefix; a file that parses but fails to compile or run must not.
+        let first_line = |src: &str| {
+            ShadowLang::run_programs(
+                build_shadow_env(vec![]),
+                SourceList::new_with_sources(vec![build_source_named("200_dev_x.lisp", src)]),
+            )
+            .unwrap_err()
+            .detail()
+            .lines()
+            .next()
+            .unwrap()
+            .to_string()
+        };
+        for syntax in [
+            "(env/set \"A\" \"1\"",
+            "(env/set \"A\" \"\\e\")",
+            "(env/set \"A\" @)",
+        ] {
+            assert!(
+                first_line(syntax).starts_with("200_dev_x.lisp:1:"),
+                "{syntax}"
+            );
+        }
+        for other in [
+            "(if)",
+            "(env/sett \"A\" \"1\")",
+            "(env/set \"A\" (concat \"x\" (env/get \"UNSET_X\")))",
+        ] {
+            assert!(
+                first_line(other).starts_with("error in 200_dev_x.lisp:1:"),
+                "{other}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_error_display_quotes_only_part_of_a_long_line() {
+        let line = format!("(env/set \"A\" \"{}\" (format))", "x".repeat(10_000));
+        let err = ShadowLang::run_programs(
+            build_shadow_env(vec![]),
+            SourceList::new_with_sources(vec![build_source(&line)]),
+        )
+        .unwrap_err();
+        let shown = err.to_string();
+        let excerpt = shown.lines().nth(1).unwrap();
+        assert!(excerpt.chars().count() < 200, "{excerpt}");
+        assert!(excerpt.ends_with("(format))"), "{excerpt}");
+        let caret = shown.lines().nth(2).unwrap();
+        let chars_before = |s: &str, i: usize| s[..i].chars().count();
+        assert_eq!(
+            chars_before(caret, caret.find('^').unwrap()),
+            chars_before(excerpt, excerpt.find("format").unwrap())
+        );
+    }
+
+    /// Doubles `seed` with `concat` `n` times in one `let`; each step is cheap to write.
+    fn doubling(seed: &str, n: usize) -> String {
+        let bindings: String = (1..=n)
+            .map(|i| format!(" (a{i} (concat a{} a{}))", i - 1, i - 1))
+            .collect();
+        format!("(let ((a0 {seed}){bindings}) ())")
+    }
+
+    #[test]
+    fn test_limits_bound_hostile_programs() {
+        let too_large = format!(
+            "value is larger than Shadowlisp's limit of {} bytes or elements",
+            eval::MAX_VALUE_SIZE
+        );
+        // Without limits, each of these would exhaust memory or time.
+        for (program, expected) in [
+            (doubling(r#""xxxxxxxx""#, 64), too_large.as_str()),
+            (doubling(r#"(list "x")"#, 64), too_large.as_str()),
+            (
+                format!(
+                    "(let ((a0 (list \"x\")){}) ())",
+                    (1..=100)
+                        .map(|i| format!(" (a{i} (list a{}))", i - 1))
+                        .collect::<String>()
+                ),
+                "lists may be nested at most 64 deep",
+            ),
+            (
+                (0..20_000)
+                    .map(|i| {
+                        format!("(env/prepend-to-pathlist \"P\" \"/a/longish/directory/{i}\")\n")
+                    })
+                    .collect(),
+                "program exceeded Shadowlisp's evaluation limit",
+            ),
+            // `ne` compares every pair of its arguments: 100,000 of them is five billion
+            // comparisons from a 589 kB program.
+            (
+                format!(
+                    "(ne {})",
+                    (0..100_000)
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+                "program exceeded Shadowlisp's evaluation limit",
+            ),
+            // A literal is held to the same limit as a value built at runtime.
+            (
+                format!("(provide \"{}\")", "x".repeat(eval::MAX_VALUE_SIZE + 1)),
+                too_large.as_str(),
+            ),
+        ] {
+            let err = run(&program).unwrap_err();
+            assert_eq!(err.message, expected);
+        }
+
+        // The limits leave room for far larger programs than anyone writes.
+        let doubled = run(&format!(
+            r#"(let ((a0 "x"){}) (env/set "A" a16))"#,
+            (1..=16)
+                .map(|i| format!(" (a{i} (concat a{} a{}))", i - 1, i - 1))
+                .collect::<String>()
+        ))
+        .unwrap();
+        assert_eq!(doubled.get("A").map(|v| v.len()), Some(1 << 16));
+        let at_limit = format!("(provide \"{}\")", "x".repeat(eval::MAX_VALUE_SIZE));
+        assert!(run(&at_limit).is_ok());
+        let distinct: Vec<String> = (0..2_000).map(|i| i.to_string()).collect();
+        let ne = run(&format!(
+            r#"(env/set "NE" (if (ne {}) "distinct" "repeated"))"#,
+            distinct.join(" ")
+        ))
+        .unwrap();
+        assert_eq!(ne.get("NE").as_deref(), Some("distinct"));
+        let bindings: String = (0..50_000).map(|i| format!(" (v{i} \"{i}\")")).collect();
+        let many = run(&format!("(let ({bindings}) (env/set \"A\" v49999))")).unwrap();
+        assert_eq!(many.get("A").as_deref(), Some("49999"));
+    }
+
+    #[test]
+    fn test_rejects_values_the_environment_cannot_hold() {
+        for (program, reason) in [
+            (
+                r#"(env/set "A" "a\0b")"#,
+                "values may not contain a NUL byte",
+            ),
+            (
+                r#"(env/set "A" "a\x1e\x02\x1fPATH\x1f/evil")"#,
+                "values may not contain 0x1E, the porcelain record separator",
+            ),
+            (
+                r#"(env/prepend-to-pathlist "PATH" "/x\x1f")"#,
+                "values may not contain 0x1F, the porcelain field separator",
+            ),
+        ] {
+            assert!(
+                run(program).unwrap_err().message.ends_with(reason),
+                "{program}"
+            );
+        }
+    }
+
+    /// Replays programs recorded under the Ketos interpreter this one replaced (see the fixture's
+    /// description); each must produce exactly the environment Ketos did, or fail as Ketos did.
+    #[test]
+    fn test_matches_recorded_ketos_results() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/parity/ketos.json")).unwrap();
+        let presets = fixture["presets"].as_array().unwrap();
+        let cases = fixture["cases"].as_array().unwrap();
+        assert!(cases.len() > 300);
+        for (i, case) in cases.iter().enumerate() {
+            let preset = case["preset"].as_u64().unwrap() as usize;
+            let env: HashMap<String, String> =
+                serde_json::from_value(presets[preset].clone()).unwrap();
+            let files: BTreeMap<String, String> =
+                serde_json::from_value(case["files"].clone()).unwrap();
+            let expected: Option<HashMap<String, Option<String>>> =
+                serde_json::from_value(case["expect"].clone()).unwrap();
+            let source = Source {
+                dir: "dir".to_string(),
+                files: files
+                    .iter()
+                    .map(|(name, contents)| SourceFile {
+                        name: name.clone(),
+                        contents: contents.clone(),
+                    })
+                    .collect(),
+            };
+            let result = ShadowLang::run_programs(
+                Shadowenv::new(env, Data::new(), 0, false),
+                SourceList::new_with_sources(vec![source]),
+            );
+            match (result, expected) {
+                (Ok(shadowenv), Some(expected)) => {
+                    let mut exports = shadowenv.exports().unwrap();
+                    exports.remove("__shadowenv_data");
+                    assert_eq!(exports, expected, "case {i}: {files:?}");
+                }
+                (Err(_), None) => {}
+                (Ok(_), None) => panic!("case {i}: Ketos failed, but this succeeded: {files:?}"),
+                (Err(err), Some(_)) => panic!("case {i}: Ketos succeeded, but: {err}\n{files:?}"),
+            }
+        }
     }
 }
