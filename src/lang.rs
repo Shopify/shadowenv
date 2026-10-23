@@ -761,6 +761,23 @@ mod tests {
                     .collect(),
                 "program exceeded Shadowlisp's evaluation limit",
             ),
+            // `ne` compares every pair of its arguments: 100,000 of them is five billion
+            // comparisons from a 589 kB program.
+            (
+                format!(
+                    "(ne {})",
+                    (0..100_000)
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+                "program exceeded Shadowlisp's evaluation limit",
+            ),
+            // A literal is held to the same limit as a value built at runtime.
+            (
+                format!("(provide \"{}\")", "x".repeat(eval::MAX_VALUE_SIZE + 1)),
+                too_large.as_str(),
+            ),
         ] {
             let err = run(&program).unwrap_err();
             assert_eq!(err.message, expected);
@@ -775,6 +792,15 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(doubled.get("A").map(|v| v.len()), Some(1 << 16));
+        let at_limit = format!("(provide \"{}\")", "x".repeat(eval::MAX_VALUE_SIZE));
+        assert!(run(&at_limit).is_ok());
+        let distinct: Vec<String> = (0..2_000).map(|i| i.to_string()).collect();
+        let ne = run(&format!(
+            r#"(env/set "NE" (if (ne {}) "distinct" "repeated"))"#,
+            distinct.join(" ")
+        ))
+        .unwrap();
+        assert_eq!(ne.get("NE").as_deref(), Some("distinct"));
         let bindings: String = (0..50_000).map(|i| format!(" (v{i} \"{i}\")")).collect();
         let many = run(&format!("(let ({bindings}) (env/set \"A\" v49999))")).unwrap();
         assert_eq!(many.get("A").as_deref(), Some("49999"));

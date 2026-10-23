@@ -560,18 +560,20 @@ impl<'a> Machine<'a> {
                 });
                 Ok(Value::Bool(equal.unwrap_or(false)))
             }
+            // Unlike `eq`'s, `ne`'s comparisons grow with the square of its argument count, so
+            // the input charge doesn't cover them: each pair pays for its own comparison.
             Builtin::Ne => {
-                let distinct = (|| {
-                    for (i, a) in args.iter().enumerate() {
-                        for b in &args[i + 1..] {
-                            if a.strict_eq(b)? {
-                                return Ok(false);
-                            }
+                for (i, a) in args.iter().enumerate() {
+                    for b in &args[i + 1..] {
+                        self.charge(a.size().min(b.size()), span)?;
+                        match a.strict_eq(b) {
+                            Ok(true) => return Ok(Value::Bool(false)),
+                            Ok(false) => {}
+                            Err(()) => return Ok(Value::Bool(true)),
                         }
                     }
-                    Ok::<_, ()>(true)
-                })();
-                Ok(Value::Bool(distinct.unwrap_or(true)))
+                }
+                Ok(Value::Bool(true))
             }
             Builtin::StrictEq => {
                 let (first, rest) = args.split_first().expect("arity checked");
@@ -668,7 +670,7 @@ impl<'a> Machine<'a> {
     }
 }
 
-fn too_large(span: Span) -> Fault {
+pub(super) fn too_large(span: Span) -> Fault {
     Fault::new(
         span,
         format!("value is larger than Shadowlisp's limit of {MAX_VALUE_SIZE} bytes or elements"),

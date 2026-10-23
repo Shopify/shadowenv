@@ -4,7 +4,7 @@
 //! Nothing else exists, so a program that mentions any other name is rejected before it runs.
 
 use super::{
-    eval::{Builtin, Value},
+    eval::{too_large, Builtin, Value, MAX_VALUE_SIZE},
     reader::{Expr, ExprKind},
     Fault, Span,
 };
@@ -131,6 +131,8 @@ impl<'a> Compiler<'a> {
             ExprKind::Unit => Kind::Literal(Value::Unit),
             ExprKind::Bool(b) => Kind::Literal(Value::Bool(*b)),
             ExprKind::Int(i) => Kind::Literal(Value::Int(*i)),
+            // A literal is a value the program built, so the same limit applies.
+            ExprKind::Str(s) if s.len() > MAX_VALUE_SIZE => return Err(too_large(expr.span)),
             ExprKind::Str(s) => Kind::Literal(Value::Str(s.as_str().into())),
             ExprKind::Name(name) => self.reference(name, expr.span)?,
             ExprKind::List(items) => self.list(items, expr.span)?,
