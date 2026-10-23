@@ -56,7 +56,9 @@ lists and expressions nest at most 64 deep; and each run has a fixed budget of w
 real programs use. A `.shadowenv.d` may hold at most 256 `.lisp` files totalling 1 MiB. A variable
 can't be set to a value containing NUL, 0x1E, or 0x1F, or one whose name and value together exceed
 128 KiB, the most an operating system passes to a program. Programs can't set `__shadowenv_data`:
-it is where shadowenv records what to undo.
+it is where shadowenv records what to undo, including the original value of every variable a
+program changes, and it is held to the same 128 KiB. If that record wouldn't fit, activation fails
+rather than leave a variable no command could be started with.
 
 # Environment Manipulation
 

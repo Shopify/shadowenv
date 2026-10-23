@@ -27,6 +27,20 @@ pub struct List {
     /// written by older versions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exact: Option<ListValues>,
+    /// Where each entry the activation removed or moved goes back, for when `exact` is absent or
+    /// the lists are too long to rebase. `deletions` holds the same entries without positions,
+    /// for older versions. Absent in data written by older versions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restore: Vec<Restore>,
+}
+
+/// An entry to put back on deactivation, and the entry it went before: the first one after it,
+/// originally, that the activation kept. `None` if nothing after it was kept.
+#[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
+pub struct Restore {
+    pub entry: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Eq, PartialEq)]
@@ -84,12 +98,14 @@ impl Data {
         additions: Vec<String>,
         deletions: Vec<String>,
         exact: Option<ListValues>,
+        restore: Vec<Restore>,
     ) {
         self.lists.push(List {
             name,
             additions,
             deletions,
             exact,
+            restore,
         })
     }
 }
